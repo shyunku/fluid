@@ -23,52 +23,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script src="miniReact.js"></script>
-
-    <script>
-      // App 컴포넌트 정의
-      const App = () => {
-        return h(SubItem, { id: 0, depth: 0, key: 0 });
-      };
-
-      // SubItem 컴포넌트 정의
-      const SubItem = ({ id, depth }) => {
-        const [items, setItems] = useState([]);
-
-        const onItemClick = () => {
-          setItems((items) => [
-            { id: (items[0]?.id ?? -1) + 1, depth: depth + 1 },
-            ...items,
-          ]);
-        };
-
-        return h(
-          "div",
-          { class: "item", style: `margin-left: ${30 * depth}px` },
-          h(
-            "div",
-            { class: "header" },
-            h("div", { class: "id" }, `id: ${id}`),
-            h("button", { onClick: onItemClick }, "click me")
-          ),
-          h(
-            "div",
-            { class: "item-list" },
-            // 수정: 내부 map 호출 제거 및 각 항목에 대해 단일 SubItem 렌더링, 고유 key 부여
-            items.map((item) =>
-              h(
-                "div",
-                { class: "sub-item", key: item.id },
-                h(SubItem, { ...item, key: item.id })
-              )
-            )
-          )
-        );
-      };
-
-      renderRoot(App);
-      window.App = App;
-      render(App(), document.getElementById("root"));
-    </script>
+    <script src="./index.js" type="module"></script>
   </body>
 </html>

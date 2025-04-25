@@ -1,4 +1,4 @@
-import { NodeType } from "./types.js";
+import { NodeTagType } from "./types.js";
 
 export function h(type, props = {}, ...children) {
   props = props || {};
@@ -6,7 +6,7 @@ export function h(type, props = {}, ...children) {
     return typeof child === "object"
       ? child
       : {
-          type: NodeType.TEXT_ELEMENT,
+          type: NodeTagType.TEXT,
           props: { nodeValue: child, children: [] },
           key: null,
         };

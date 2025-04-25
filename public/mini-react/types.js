@@ -1,15 +1,23 @@
 export const NodeTagType = {
   HOST: "host",
-  FUNCTION_COMPONENT: "function_component",
+  ROOT: "root",
+  TEXT: "text",
+  COMPONENT: "component",
 };
 
 export const NodeType = {
-  TEXT_ELEMENT: "text_element",
+  TEXT: "text",
 };
 
 export const NodeConnectionType = {
   CHILD: "child",
   SIBLING: "sibling",
+};
+
+export const EffectType = {
+  PLACEMENT: "placement",
+  UPDATE: "update",
+  DELETE: "delete",
 };
 
 export class FiberNode {
@@ -18,11 +26,9 @@ export class FiberNode {
     this.child = null; // 첫 번째 자식 FiberNode
     this.sibling = null; // 다음 형제 FiberNode
     this.parent = null; // 부모 FiberNode
-    console.log("FiberNode created for:", dom);
   }
 
   connect(type, node) {
-    console.log("FiberNode.connect", type, "node:", node.target);
     if (type === NodeConnectionType.CHILD) {
       node.parent = this;
       this.child = node;
@@ -34,8 +40,8 @@ export class FiberNode {
 }
 
 export class Fiber {
-  constructor(tag, type, props, key) {
-    this.tag = tag; // HOST | FUNCTION_COMPONENT
+  constructor(type, props, key) {
+    this.tag = Fiber.calculateTag(type); // HOST | COMPONENT
     this.type = type; // 문자열 태그 또는 함수
     this.props = props; // props + children
     this.key = key;
@@ -46,8 +52,13 @@ export class Fiber {
     this.child = null;
     this.sibling = null;
     this.effectTag = null;
-    this.componentName =
-      this.tag === NodeTagType.FUNCTION_COMPONENT ? type.name : null;
-    console.log("Fiber created:", { tag, type, props, key });
+    this.componentName = this.tag === NodeTagType.COMPONENT ? type.name : null;
+  }
+
+  static calculateTag(type) {
+    if (type === null) return NodeTagType.ROOT;
+    if (type === NodeType.TEXT) return NodeTagType.TEXT;
+    if (typeof type === "string") return NodeTagType.HOST;
+    return NodeTagType.COMPONENT;
   }
 }

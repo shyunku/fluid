@@ -4,7 +4,7 @@ const LogFlags = {
   RENDER: false,
   BEGIN_WORK: false,
   COMPLETE_WORK: false,
-  COMMIT_ROOT: true,
+  COMMIT_ROOT: false,
   WORK_LOOP: false,
   PERFORM_UNIT: false,
   COMMIT_WORK: true,

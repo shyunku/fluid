@@ -6,8 +6,9 @@ import {
   EffectType,
 } from "./types.js";
 import { h } from "./h.js";
-import { prepareToRender, setRender } from "./hooks.js";
+import { prepareToRender, runEffects, setRender } from "./hooks.js";
 import { debug } from "./logger.js";
+import { changed, changedLog } from "./util.js";
 
 let currentApp = null;
 let currentContainer = null;
@@ -46,8 +47,11 @@ function commitRoot() {
   deletions.forEach(commitWork);
   // 2) 배치·업데이트 처리
   commitWork(wipRoot.child);
+
   currentRoot = wipRoot;
   wipRoot = null;
+
+  runEffects();
   debug("COMMIT_ROOT", "Commit 완료, currentRoot set to:", currentRoot);
 }
 
@@ -148,12 +152,17 @@ function completeWork(fiber) {
  */
 function commitWork(fiber) {
   if (!fiber) return;
-  const parentDom = findParentDom(fiber);
   const target = fiber.stateNode?.target;
 
   if (fiber.effectTag === EffectType.PLACEMENT && target) {
+    const parentDom = findParentDom(fiber);
     debug("COMMIT_WORK", "Placement:", target, "into", parentDom);
-    parentDom.appendChild(target);
+    const nextDomSibling = getNextDomSibling(fiber);
+    if (nextDomSibling) {
+      parentDom.insertBefore(target, nextDomSibling);
+    } else {
+      parentDom.appendChild(target);
+    }
   } else if (fiber.effectTag === EffectType.UPDATE && target) {
     debug(
       "COMMIT_WORK",
@@ -163,7 +172,11 @@ function commitWork(fiber) {
       fiber.alternate.props,
       fiber.props
     );
-    updateDom(target, fiber.alternate.props, fiber.props);
+
+    if (changed(fiber.alternate.props, fiber.props)) {
+      // changedLog(fiber.alternate.props, fiber.props);
+      updateDom(target, fiber.alternate.props, fiber.props);
+    }
   } else if (fiber.effectTag === EffectType.DELETE) {
     debug("COMMIT_WORK", "Delete:", fiber);
     commitDeletion(fiber, parentDom);
@@ -185,7 +198,14 @@ function applyProps(dom, props) {
       if (name.startsWith("on") && typeof props[name] === "function") {
         const eventType = name.slice(2).toLowerCase();
         debug("APPLY_PROPS", `addEventListener: ${eventType}`);
-        dom.addEventListener(eventType, props[name]);
+        switch (eventType) {
+          case "change":
+            dom.addEventListener("input", props[name]);
+            break;
+          default:
+            dom.addEventListener(eventType, props[name]);
+            break;
+        }
       } else if (name === "className") {
         dom.className = props[name];
       } else {
@@ -254,6 +274,37 @@ function findParentDom(fiber) {
     parentFiber = parentFiber.parent;
   }
   return parentFiber ? parentFiber.stateNode.target : null;
+}
+
+function getNextDomSibling(fiber) {
+  let sib = fiber.sibling;
+  while (sib) {
+    if (sib.stateNode?.target && sib.effectTag !== EffectType.PLACEMENT) {
+      return sib.stateNode.target;
+    }
+    const childDom = getFirstDomChild(sib);
+    if (childDom) return childDom;
+    sib = sib.sibling;
+  }
+
+  if (fiber.parent && fiber.parent?.tag === NodeTagType.COMPONENT)
+    return getNextDomSibling(fiber.parent);
+  return null;
+}
+
+function getFirstDomChild(fiber) {
+  if (fiber.stateNode?.target && fiber.effectTag !== EffectType.PLACEMENT) {
+    return fiber.stateNode.target;
+  }
+
+  let child = fiber.child;
+  while (child) {
+    const dom = getFirstDomChild(child);
+    if (dom) return dom;
+    child = child.sibling;
+  }
+
+  return null;
 }
 
 /**

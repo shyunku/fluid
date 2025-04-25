@@ -2,6 +2,7 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
+
     <title>MiniReact Example</title>
     <!--<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>
@@ -18,6 +19,20 @@
       .item-list {
         display: flex;
         flex-direction: column;
+      }
+
+      @keyframes fade-in {
+        0% {
+          background-color: purple;
+        }
+
+        100% {
+          background-color: transparent;
+        }
+      }
+
+      * {
+        animation: fade-in 1s linear;
       }
     </style>
   </head>

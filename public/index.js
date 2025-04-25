@@ -1,6 +1,6 @@
 import { h } from "./mini-react/h.js";
 import { render } from "./mini-react/core.js";
-import { useState } from "./mini-react/hooks.js";
+import { useEffect, useMemo, useState } from "./mini-react/hooks.js";
 
 const App = () => {
   return h(SubItem, { id: 0, depth: 0, key: 0 });
@@ -9,6 +9,10 @@ const App = () => {
 // SubItem 컴포넌트 정의
 const SubItem = ({ id, depth }) => {
   const [items, setItems] = useState([]);
+  const [input, setInput] = useState("");
+  const [duration, setDuration] = useState(0);
+  const startTime = useMemo(() => Date.now(), []);
+
   const onItemClick = () => {
     setItems((items) => [
       { id: (items[0]?.id ?? -1) + 1, depth: depth + 1 },
@@ -16,15 +20,27 @@ const SubItem = ({ id, depth }) => {
     ]);
   };
 
+  useEffect(() => {
+    // let t = setInterval(() => {
+    //   setDuration(Date.now() - startTime);
+    // }, 1000);
+    // return () => {
+    //   clearInterval(t);
+    // };
+  }, []);
+
   return h(
     "div",
-    { className: "item", style: `margin-left: ${30 * depth}px` },
+    { className: "item", style: `margin-left: ${30}px` },
     h(
       "div",
       { className: "header" },
       h("div", { className: "id" }, `id: ${id}`),
       h("button", { onClick: onItemClick }, "click me"),
-      h("input")
+      h("input", { onChange: (e) => setInput(e.target.value), value: input }),
+      input,
+      "/",
+      duration + "ms"
     ),
     h(
       "div",

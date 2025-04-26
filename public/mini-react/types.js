@@ -53,6 +53,7 @@ export class Fiber {
     this.sibling = null;
     this.effectTag = null;
     this.componentName = this.tag === NodeTagType.COMPONENT ? type.name : null;
+    this.index = null;
   }
 
   static calculateTag(type) {

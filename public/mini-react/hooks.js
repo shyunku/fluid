@@ -3,6 +3,7 @@ import { debug } from "./logger.js";
 let wipFiber = null;
 let hookIndex = 0;
 let renderCallback = null;
+let scheduled = false;
 const pendingEffects = [];
 
 export function prepareToRender(fiber) {
@@ -16,8 +17,11 @@ export function setRender(fn) {
 }
 
 export function scheduleUpdate() {
+  if (scheduled) return;
+  scheduled = true;
   debug("SCHEDULE_UPDATE", "scheduleUpdate called");
   window.requestIdleCallback(() => {
+    scheduled = false;
     debug("SCHEDULE_UPDATE", "scheduleUpdate invoking renderCallback");
     renderCallback && renderCallback();
   });
@@ -55,8 +59,9 @@ export function useState(initial) {
 
 export function useEffect(effect, deps) {
   const oldHook = wipFiber.alternate?.hooks[hookIndex];
+  const prevDeps = oldHook?.deps || [];
   const hasChanged = oldHook
-    ? !deps || deps.some((d, i) => !Object.is(d, oldHook.deps[i]))
+    ? !deps || deps.some((d, i) => !Object.is(d, prevDeps[i]))
     : true;
   const hook = {
     deps,

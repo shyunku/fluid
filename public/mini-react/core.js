@@ -125,7 +125,7 @@ function beginWork(fiber) {
  */
 function completeWork(fiber) {
   debug("COMPLETE_WORK", "completeWork for:", fiber);
-  if (!(fiber.stateNode instanceof FiberNode)) return;
+  if (!(fiber?.stateNode instanceof FiberNode)) return;
 
   let parentFiber = fiber.parent;
   while (parentFiber && !(parentFiber.stateNode instanceof FiberNode)) {
@@ -155,36 +155,51 @@ function commitWork(fiber) {
   const target = fiber.stateNode?.target;
 
   if (fiber.effectTag === EffectType.PLACEMENT && target) {
-    const parentDom = findParentDom(fiber);
-    debug("COMMIT_WORK", "Placement:", target, "into", parentDom);
-    const nextDomSibling = getNextDomSibling(fiber);
-    if (nextDomSibling) {
-      parentDom.insertBefore(target, nextDomSibling);
-    } else {
-      parentDom.appendChild(target);
-    }
+    commitPlacement(fiber);
   } else if (fiber.effectTag === EffectType.UPDATE && target) {
-    debug(
-      "COMMIT_WORK",
-      "Update:",
-      fiber,
-      target,
-      fiber.alternate.props,
-      fiber.props
-    );
-
-    if (changed(fiber.alternate.props, fiber.props)) {
-      // changedLog(fiber.alternate.props, fiber.props);
-      updateDom(target, fiber.alternate.props, fiber.props);
-    }
+    commitUpdate(fiber);
   } else if (fiber.effectTag === EffectType.DELETE) {
-    debug("COMMIT_WORK", "Delete:", fiber);
-    commitDeletion(fiber, parentDom);
+    commitDelete(fiber);
     return;
   }
 
   commitWork(fiber.child);
   commitWork(fiber.sibling);
+}
+
+function commitPlacement(fiber) {
+  const target = fiber.stateNode?.target;
+  const parentDom = findParentDom(fiber);
+  debug("COMMIT_WORK", "Placement:", target, "into", parentDom);
+
+  const nextDomSibling = getNextDomSibling(fiber);
+  if (nextDomSibling) {
+    parentDom.insertBefore(target, nextDomSibling);
+  } else {
+    parentDom.appendChild(target);
+  }
+}
+
+function commitUpdate(fiber) {
+  const target = fiber.stateNode?.target;
+  debug(
+    "COMMIT_WORK",
+    "Update:",
+    fiber,
+    target,
+    fiber.alternate.props,
+    fiber.props
+  );
+  if (changed(fiber.alternate.props, fiber.props)) {
+    // changedLog(fiber.alternate.props, fiber.props);
+    updateDom(target, fiber.alternate.props, fiber.props);
+  }
+}
+
+function commitDelete(fiber) {
+  debug("COMMIT_WORK", "Delete:", fiber);
+  const parentDom = findParentDom(fiber);
+  commitDeletion(fiber, parentDom);
 }
 
 /**
@@ -209,9 +224,24 @@ function applyProps(dom, props) {
       } else if (name === "className") {
         dom.className = props[name];
       } else {
-        dom[name] = props[name];
+        applyProp(dom, name, props[name]);
       }
     });
+}
+
+/**
+ * applyProp: DOM에 기타 속성을 상세하게 설정합니다.
+ */
+function applyProp(dom, name, value) {
+  if (name === "style" && typeof value === "object") {
+    Object.assign(dom.style, value);
+  } else if (name === "dangerouslySetInnerHTML") {
+    dom.innerHTML = value.__html;
+  } else if (!(name in dom)) {
+    dom.setAttribute(name, value);
+  } else {
+    dom[name] = value;
+  }
 }
 
 /**
@@ -267,52 +297,6 @@ function commitDeletion(fiber, parentDom) {
 }
 
 /**
- * findParentDom: 실제 DOM 요소가 있는 상위 노드를 찾습니다.
- */
-function findParentDom(fiber) {
-  let parentFiber = fiber.parent;
-  while (
-    parentFiber &&
-    parentFiber.tag !== NodeTagType.HOST &&
-    parentFiber.tag !== NodeTagType.ROOT
-  ) {
-    parentFiber = parentFiber.parent;
-  }
-  return parentFiber ? parentFiber.stateNode.target : null;
-}
-
-function getNextDomSibling(fiber) {
-  let sib = fiber.sibling;
-  while (sib) {
-    if (sib.stateNode?.target && sib.effectTag !== EffectType.PLACEMENT) {
-      return sib.stateNode.target;
-    }
-    const childDom = getFirstDomChild(sib);
-    if (childDom) return childDom;
-    sib = sib.sibling;
-  }
-
-  if (fiber.parent && fiber.parent?.tag === NodeTagType.COMPONENT)
-    return getNextDomSibling(fiber.parent);
-  return null;
-}
-
-function getFirstDomChild(fiber) {
-  if (fiber.stateNode?.target && fiber.effectTag !== EffectType.PLACEMENT) {
-    return fiber.stateNode.target;
-  }
-
-  let child = fiber.child;
-  while (child) {
-    const dom = getFirstDomChild(child);
-    if (dom) return dom;
-    child = child.sibling;
-  }
-
-  return null;
-}
-
-/**
  * reconcileChildren: key를 활용해 이전 Fiber와 매칭하고,
  * 타입/키가 같으면 업데이트, 새로 추가되거나 삭제가 필요한 노드를 처리합니다.
  */
@@ -321,6 +305,10 @@ function reconcileChildren(wipFiber, elements) {
   const existing = {};
   let oldFiber = wipFiber.alternate?.child;
   let index = 0;
+
+  // TODO :: 해당 내용이 component fiber에도 의미가 있는지 확인
+  // 없다면 if 처리
+
   // 이전 Fiber를 key 기반으로 맵에 저장
   while (oldFiber) {
     const key = oldFiber.key ?? index;
@@ -345,6 +333,18 @@ function reconcileChildren(wipFiber, elements) {
       newFiber.stateNode = sameFiber.stateNode;
       newFiber.alternate = sameFiber;
       newFiber.effectTag = EffectType.UPDATE;
+      newFiber.index = newIndex;
+
+      // TODO :: fix this
+      if (sameFiber.index !== newIndex) {
+        // (not working - works wrong)
+        newFiber.effectTag = EffectType.PLACEMENT;
+        // propagte placement flag to highest host child
+        const firstHostFiber = getFirstDomChild(newFiber);
+        if (firstHostFiber) {
+          firstHostFiber = EffectType.PLACEMENT;
+        }
+      }
       delete existing[key];
     } else if (element) {
       // 배치
@@ -378,6 +378,57 @@ function reconcileChildren(wipFiber, elements) {
 }
 
 /**
+ * findParentDom: 실제 DOM 요소가 있는 상위 노드를 찾습니다.
+ */
+function findParentDom(fiber) {
+  let parentFiber = fiber.parent;
+  while (
+    parentFiber &&
+    parentFiber.tag !== NodeTagType.HOST &&
+    parentFiber.tag !== NodeTagType.ROOT
+  ) {
+    parentFiber = parentFiber.parent;
+  }
+  return parentFiber ? parentFiber.stateNode.target : null;
+}
+
+/**
+ *
+ * @param {Fiber} fiber
+ * @returns fiber에 속한 노드 중 가장 가까운 host fiber
+ */
+function getNextDomSibling(fiber) {
+  let sib = fiber.sibling;
+  while (sib) {
+    if (sib.stateNode?.target && sib.effectTag !== EffectType.PLACEMENT) {
+      return sib.stateNode.target;
+    }
+    const childDom = getFirstDomChild(sib);
+    if (childDom) return childDom;
+    sib = sib.sibling;
+  }
+
+  if (fiber.parent && fiber.parent?.tag === NodeTagType.COMPONENT)
+    return getNextDomSibling(fiber.parent);
+  return null;
+}
+
+function getFirstDomChild(fiber) {
+  if (fiber.stateNode?.target && fiber.effectTag !== EffectType.PLACEMENT) {
+    return fiber.stateNode.target;
+  }
+
+  let child = fiber.child;
+  while (child) {
+    const dom = getFirstDomChild(child);
+    if (dom) return dom;
+    child = child.sibling;
+  }
+
+  return null;
+}
+
+/**
  * workLoop: 유휴 시간에 performUnitOfWork를 반복 호출합니다.
  */
 function workLoop(deadline) {
@@ -385,9 +436,8 @@ function workLoop(deadline) {
   while (nextUnitOfWork && deadline.timeRemaining() > 1) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
   }
-  if (!nextUnitOfWork && wipRoot) {
-    commitRoot();
-  }
+  if (!nextUnitOfWork && wipRoot) commitRoot();
+
   requestIdleCallback(workLoop);
 }
 requestIdleCallback(workLoop);

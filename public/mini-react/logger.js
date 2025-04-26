@@ -1,6 +1,6 @@
 // 로그 플래그 설정: 각 단계별로 켜고 끌 수 있으며, ALL=false로 한꺼번에 모두 끌 수 있습니다.
 const LogFlags = {
-  ALL: false,
+  ALL: true,
   RENDER: false,
   BEGIN_WORK: false,
   COMPLETE_WORK: false,

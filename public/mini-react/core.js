@@ -36,6 +36,8 @@ export function render(element, container) {
   deletions = [];
   nextUnitOfWork = wipRoot;
   debug("RENDER", "Render initialized:", wipRoot);
+
+  window.vroot = wipRoot;
 }
 
 /**
@@ -107,8 +109,6 @@ function beginWork(fiber) {
         const dom = document.createElement(fiber.type);
         applyProps(dom, fiber.props);
         fiber.stateNode = new FiberNode(dom);
-      } else {
-        applyProps(fiber.stateNode.target, fiber.props);
       }
       reconcileChildren(fiber, fiber.props.children);
       break;
@@ -247,6 +247,11 @@ function updateDom(dom, prevProps, nextProps) {
         dom[name] = nextProps[name];
       }
     });
+
+  if (dom.tagName === "BUTTON" && window.getEventListeners) {
+    const es = window.getEventListeners(dom);
+    console.log(dom.tagName, es);
+  }
 }
 
 /**

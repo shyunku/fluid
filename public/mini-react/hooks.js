@@ -46,7 +46,6 @@ export function useState(initial) {
     debug("USE_STATE", "state update queued:", action);
     hook.queue.push(typeof action === "function" ? action : () => action);
     scheduleUpdate();
-    return Date.now();
   };
   wipFiber.hooks[hookIndex] = hook;
   debug("USE_STATE", "hook stored at index", hookIndex, hook, hook.queue);

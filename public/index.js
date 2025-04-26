@@ -3,14 +3,18 @@ import { render } from "./mini-react/core.js";
 import { useEffect, useMemo, useState } from "./mini-react/hooks.js";
 
 const App = () => {
-  return h(SubItem, { id: 0, depth: 0, key: 0 });
+  return h(SubItem, { id: 0, parentId: null, depth: 0, key: 0 });
 };
 
 // SubItem 컴포넌트 정의
-const SubItem = ({ id, depth }) => {
+const SubItem = ({ id, parentId, depth }) => {
   const [items, setItems] = useState([]);
   const [input, setInput] = useState("");
   const [duration, setDuration] = useState(0);
+  const thisId = useMemo(
+    () => `${parentId ? `${parentId}.` : ""}${id}`,
+    [parentId, id]
+  );
   const startTime = useMemo(() => Date.now(), []);
 
   const onItemClick = () => {
@@ -21,21 +25,21 @@ const SubItem = ({ id, depth }) => {
   };
 
   useEffect(() => {
-    // let t = setInterval(() => {
-    //   setDuration(Date.now() - startTime);
-    // }, 1000);
-    // return () => {
-    //   clearInterval(t);
-    // };
+    let t = setInterval(() => {
+      setDuration(Date.now() - startTime);
+    }, 0);
+    return () => {
+      clearInterval(t);
+    };
   }, []);
 
   return h(
     "div",
-    { className: "item", style: `margin-left: ${30}px` },
+    { className: "item", style: `margin-left: ${20}px` },
     h(
       "div",
       { className: "header" },
-      h("div", { className: "id" }, `id: ${id}`),
+      h("div", { className: "id" }, `id: ${thisId}`),
       h("button", { onClick: onItemClick }, "click me"),
       h("input", { onChange: (e) => setInput(e.target.value), value: input }),
       input,
@@ -46,7 +50,13 @@ const SubItem = ({ id, depth }) => {
       "div",
       { className: "item-list" },
       // 수정: 내부 map 호출 제거 및 각 항목에 대해 단일 SubItem 렌더링, 고유 key 부여
-      items.map((item) => h(SubItem, { ...item, key: item.id }))
+      items.map((item) =>
+        h(SubItem, {
+          ...item,
+          key: `${thisId}.` + item.id,
+          parentId: thisId,
+        })
+      )
     )
   );
 };

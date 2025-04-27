@@ -9,6 +9,11 @@ import { h } from "./h.js";
 import { prepareToRender, runEffects, setRender } from "./hooks.js";
 import { debug } from "./logger.js";
 import { changed, changedLog } from "./util.js";
+import {
+  findHostParentDom,
+  findHostSiblingDom,
+  insertOrAppendDom,
+} from "./dom-util.js";
 
 let currentApp = null;
 let currentContainer = null;
@@ -81,10 +86,21 @@ function performUnitOfWork(fiber) {
  * - TEXT: 텍스트 노드 생성
  * - COMPONENT: 함수형 컴포넌트 실행 후 reconcile
  * - HOST: DOM 생성 또는 업데이트 후 reconcile
- * - ROOT: 자식 reconcile
+ * - HOST_ROOT: 자식 reconcile
  */
 function beginWork(fiber) {
   debug("BEGIN_WORK", "beginWork:", fiber);
+
+  // TODO :: validate bail-out
+  // if (!wipFiber.alternate || propsEqual(wipFiber, wipFiber.alternate)) {
+  //   cloneChildren(wipFiber);
+  //   let child = wipFiber.child;
+  //   while (child) {
+  //     child.return = wipFiber;
+  //     child = child.sibling;
+  //   }
+  //   return null;  // bail-out
+  // }
 
   switch (fiber.tag) {
     case NodeTagType.TEXT: {
@@ -113,7 +129,7 @@ function beginWork(fiber) {
       reconcileChildren(fiber, fiber.props.children);
       break;
     }
-    case NodeTagType.ROOT: {
+    case NodeTagType.HOST_ROOT: {
       reconcileChildren(fiber, fiber.props.children);
       break;
     }
@@ -152,11 +168,12 @@ function completeWork(fiber) {
  */
 function commitWork(fiber) {
   if (!fiber) return;
-  const target = fiber.stateNode?.target;
 
-  if (fiber.effectTag === EffectType.PLACEMENT && target) {
+  // console.log(fiber, fiber.effectTag);
+
+  if (fiber.effectTag === EffectType.PLACEMENT) {
     commitPlacement(fiber);
-  } else if (fiber.effectTag === EffectType.UPDATE && target) {
+  } else if (fiber.effectTag === EffectType.UPDATE) {
     commitUpdate(fiber);
   } else if (fiber.effectTag === EffectType.DELETE) {
     commitDelete(fiber);
@@ -168,20 +185,16 @@ function commitWork(fiber) {
 }
 
 function commitPlacement(fiber) {
-  const target = fiber.stateNode?.target;
-  const parentDom = findParentDom(fiber);
-  debug("COMMIT_WORK", "Placement:", target, "into", parentDom);
+  const parentDom = findHostParentDom(fiber);
+  const beforeDom = findHostSiblingDom(fiber); // null 이면 append
 
-  const nextDomSibling = getNextDomSibling(fiber);
-  if (nextDomSibling) {
-    parentDom.insertBefore(target, nextDomSibling);
-  } else {
-    parentDom.appendChild(target);
-  }
+  debug("COMMIT_WORK", "Placement:", fiber, parentDom, beforeDom);
+  insertOrAppendDom(fiber, beforeDom, parentDom);
 }
 
 function commitUpdate(fiber) {
   const target = fiber.stateNode?.target;
+  if (!target) return;
   debug(
     "COMMIT_WORK",
     "Update:",
@@ -198,7 +211,7 @@ function commitUpdate(fiber) {
 
 function commitDelete(fiber) {
   debug("COMMIT_WORK", "Delete:", fiber);
-  const parentDom = findParentDom(fiber);
+  const parentDom = findHostParentDom(fiber);
   commitDeletion(fiber, parentDom);
 }
 
@@ -339,11 +352,6 @@ function reconcileChildren(wipFiber, elements) {
       if (sameFiber.index !== newIndex) {
         // (not working - works wrong)
         newFiber.effectTag = EffectType.PLACEMENT;
-        // propagte placement flag to highest host child
-        const firstHostFiber = getFirstDomChild(newFiber);
-        if (firstHostFiber) {
-          firstHostFiber = EffectType.PLACEMENT;
-        }
       }
       delete existing[key];
     } else if (element) {
@@ -359,9 +367,11 @@ function reconcileChildren(wipFiber, elements) {
     }
 
     if (newIndex === 0) {
+      // child connection
       wipFiber.child = newFiber;
       if (newFiber) newFiber.parent = wipFiber;
     } else if (prevSibling && newFiber) {
+      // sibling connection
       prevSibling.sibling = newFiber;
       newFiber.parent = wipFiber;
     }
@@ -376,22 +386,6 @@ function reconcileChildren(wipFiber, elements) {
     deletions.push(fiberToDelete);
   }
 }
-
-/**
- * findParentDom: 실제 DOM 요소가 있는 상위 노드를 찾습니다.
- */
-function findParentDom(fiber) {
-  let parentFiber = fiber.parent;
-  while (
-    parentFiber &&
-    parentFiber.tag !== NodeTagType.HOST &&
-    parentFiber.tag !== NodeTagType.ROOT
-  ) {
-    parentFiber = parentFiber.parent;
-  }
-  return parentFiber ? parentFiber.stateNode.target : null;
-}
-
 /**
  *
  * @param {Fiber} fiber

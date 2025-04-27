@@ -40,7 +40,6 @@ const SubItem = ({
       const newItems = [...prevItems];
       const [movedItem] = newItems.splice(index, 1);
       newItems.splice(index + offset, 0, movedItem);
-      console.log(newItems);
       return newItems;
     });
   };

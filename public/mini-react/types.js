@@ -1,6 +1,6 @@
 export const NodeTagType = {
   HOST: "host",
-  ROOT: "root",
+  HOST_ROOT: "host_root",
   TEXT: "text",
   COMPONENT: "component",
 };
@@ -57,7 +57,7 @@ export class Fiber {
   }
 
   static calculateTag(type) {
-    if (type === null) return NodeTagType.ROOT;
+    if (type === null) return NodeTagType.HOST_ROOT;
     if (type === NodeType.TEXT) return NodeTagType.TEXT;
     if (typeof type === "string") return NodeTagType.HOST;
     return NodeTagType.COMPONENT;

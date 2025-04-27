@@ -8,8 +8,9 @@ import {
 import { h } from "./h.js";
 import { prepareToRender, runEffects, setRender } from "./hooks.js";
 import { debug } from "./logger.js";
-import { changed, changedLog } from "./util.js";
+import { changed, changedLog, removeFromArray } from "./util.js";
 import {
+  findChildHostFiber,
   findHostParentDom,
   findHostSiblingDom,
   insertOrAppendDom,
@@ -91,17 +92,6 @@ function performUnitOfWork(fiber) {
 function beginWork(fiber) {
   debug("BEGIN_WORK", "beginWork:", fiber);
 
-  // TODO :: validate bail-out
-  // if (!wipFiber.alternate || propsEqual(wipFiber, wipFiber.alternate)) {
-  //   cloneChildren(wipFiber);
-  //   let child = wipFiber.child;
-  //   while (child) {
-  //     child.return = wipFiber;
-  //     child = child.sibling;
-  //   }
-  //   return null;  // bail-out
-  // }
-
   switch (fiber.tag) {
     case NodeTagType.TEXT: {
       if (fiber.effectTag === EffectType.PLACEMENT) {
@@ -123,6 +113,7 @@ function beginWork(fiber) {
       if (fiber.effectTag === EffectType.PLACEMENT) {
         debug("BEGIN_WORK", "Create host DOM:", fiber.type);
         const dom = document.createElement(fiber.type);
+
         applyProps(dom, fiber.props);
         fiber.stateNode = new FiberNode(dom);
       }
@@ -168,8 +159,6 @@ function completeWork(fiber) {
  */
 function commitWork(fiber) {
   if (!fiber) return;
-
-  // console.log(fiber, fiber.effectTag);
 
   if (fiber.effectTag === EffectType.PLACEMENT) {
     commitPlacement(fiber);
@@ -281,6 +270,8 @@ function updateDom(dom, prevProps, nextProps) {
   Object.keys(nextProps)
     .filter((name) => name !== "children")
     .forEach((name) => {
+      if (prevProps[name] === nextProps[name]) return;
+
       if (name.startsWith("on") && typeof nextProps[name] === "function") {
         const eventType = name.slice(2).toLowerCase();
         dom.addEventListener(eventType, nextProps[name]);
@@ -290,11 +281,6 @@ function updateDom(dom, prevProps, nextProps) {
         dom[name] = nextProps[name];
       }
     });
-
-  if (dom.tagName === "BUTTON" && window.getEventListeners) {
-    const es = window.getEventListeners(dom);
-    console.log(dom.tagName, es);
-  }
 }
 
 /**
@@ -319,10 +305,6 @@ function reconcileChildren(wipFiber, elements) {
   let oldFiber = wipFiber.alternate?.child;
   let index = 0;
 
-  // TODO :: 해당 내용이 component fiber에도 의미가 있는지 확인
-  // 없다면 if 처리
-
-  // 이전 Fiber를 key 기반으로 맵에 저장
   while (oldFiber) {
     const key = oldFiber.key ?? index;
     oldFiber.index = index;
@@ -333,11 +315,12 @@ function reconcileChildren(wipFiber, elements) {
 
   let newIndex = 0;
   let prevSibling = null;
+  let lastPlacedIndex = 0;
 
   for (const element of elements) {
     element.key = element.props.key ?? null;
     const key = element.key ?? newIndex;
-    const sameFiber = existing[key];
+    const sameFiber = existing[key]; // 같은 키를 가진 노드
     let newFiber = null;
 
     if (sameFiber && element.type === sameFiber.type) {
@@ -348,10 +331,11 @@ function reconcileChildren(wipFiber, elements) {
       newFiber.effectTag = EffectType.UPDATE;
       newFiber.index = newIndex;
 
-      // TODO :: fix this
-      if (sameFiber.index !== newIndex) {
-        // (not working - works wrong)
+      if (sameFiber.index < lastPlacedIndex) {
+        // 앞쪽에 이미 고정된 노드가 있으므로, 이 노드는 앞으로 ‘이동’해야 함
         newFiber.effectTag = EffectType.PLACEMENT;
+      } else {
+        lastPlacedIndex = sameFiber.index; // 오른쪽 끝 갱신
       }
       delete existing[key];
     } else if (element) {
@@ -385,41 +369,6 @@ function reconcileChildren(wipFiber, elements) {
     fiberToDelete.effectTag = EffectType.DELETE;
     deletions.push(fiberToDelete);
   }
-}
-/**
- *
- * @param {Fiber} fiber
- * @returns fiber에 속한 노드 중 가장 가까운 host fiber
- */
-function getNextDomSibling(fiber) {
-  let sib = fiber.sibling;
-  while (sib) {
-    if (sib.stateNode?.target && sib.effectTag !== EffectType.PLACEMENT) {
-      return sib.stateNode.target;
-    }
-    const childDom = getFirstDomChild(sib);
-    if (childDom) return childDom;
-    sib = sib.sibling;
-  }
-
-  if (fiber.parent && fiber.parent?.tag === NodeTagType.COMPONENT)
-    return getNextDomSibling(fiber.parent);
-  return null;
-}
-
-function getFirstDomChild(fiber) {
-  if (fiber.stateNode?.target && fiber.effectTag !== EffectType.PLACEMENT) {
-    return fiber.stateNode.target;
-  }
-
-  let child = fiber.child;
-  while (child) {
-    const dom = getFirstDomChild(child);
-    if (dom) return dom;
-    child = child.sibling;
-  }
-
-  return null;
 }
 
 /**

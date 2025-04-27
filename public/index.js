@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "./mini-react/hooks.js";
 
 const App = () => {
   return h(SubItem, {
-    id: 0,
+    id: `0`,
     index: 0,
     indexEnd: 0,
     parentId: null,
@@ -39,7 +39,8 @@ const SubItem = ({
     setItems((prevItems) => {
       const newItems = [...prevItems];
       const [movedItem] = newItems.splice(index, 1);
-      newItems.splice(index + offset, 0, movedItem);
+      const finalPos = Math.max(0, Math.min(newItems.length, index + offset));
+      newItems.splice(finalPos, 0, movedItem);
       return newItems;
     });
   };
@@ -55,7 +56,11 @@ const SubItem = ({
 
   return h(
     "div",
-    { className: "item", style: `margin-left: ${20}px` },
+    {
+      className: "item",
+      style: `margin-left: ${20}px`,
+      id: `item_${thisId?.replace(/\./g, "_") ?? "unknown"}`,
+    },
     h(
       "div",
       { className: "header" },

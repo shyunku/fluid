@@ -7,7 +7,7 @@ const LogFlags = {
   COMMIT_ROOT: false,
   WORK_LOOP: false,
   PERFORM_UNIT: false,
-  COMMIT_WORK: true,
+  COMMIT_WORK: false,
   APPLY_PROPS: false,
   RECONCILE: false,
   USE_STATE: false,

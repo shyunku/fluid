@@ -1,4 +1,5 @@
 import { NodeTagType, EffectType } from "./types.js";
+import { changed } from "./util.js";
 
 /* Host 부모 탐색 */
 export function findHostParentFiber(fiber) {
@@ -53,11 +54,14 @@ export function findHostSiblingDom(fiber) {
 }
 
 /* 서브트리에서 모든 Host 노드를 찾아 삽입 */
-export function insertOrAppendDom(node, before, parentDom) {
+export function insertOrAppendDom(node, before, parentDom, replace) {
   if (node.tag === NodeTagType.HOST || node.tag === NodeTagType.TEXT) {
     const target = node.stateNode?.target;
-    if (before) parentDom.insertBefore(target, before);
-    else parentDom.appendChild(target);
+    if (before && window.aaaa !== true) {
+      parentDom.insertBefore(target, before);
+    } else {
+      parentDom.appendChild(target);
+    }
     return;
   }
   let child = node.child;
@@ -65,4 +69,19 @@ export function insertOrAppendDom(node, before, parentDom) {
     insertOrAppendDom(child, before, parentDom);
     child = child.sibling;
   }
+}
+
+export function findChildHostFiber(fiber) {
+  if (fiber.stateNode?.target && fiber.effectTag !== EffectType.PLACEMENT) {
+    return fiber.stateNode.target;
+  }
+
+  let child = fiber.child;
+  while (child) {
+    const dom = findChildHostFiber(child);
+    if (dom) return dom;
+    child = child.sibling;
+  }
+
+  return null;
 }

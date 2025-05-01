@@ -4,7 +4,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js"
+    "start": "node index.js",
+    "build": "esbuild public/mini-react/index.js --format=iife --global-name=MiniReact --bundle --outfile=dist/bundle.js"
   },
   "author": "",
   "license": "ISC",

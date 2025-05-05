@@ -9,6 +9,10 @@ app.use(express.static("public"));
 //   res.sendFile(path.resolve(__dirname, "public/index.html"));
 // });
 
+app.all("/dist/bundle.js", (req, res) => {
+  res.sendFile(path.resolve(__dirname, "dist/bundle.js"));
+});
+
 app.listen(port, () => {
   console.log(`Listening with port ${port}`);
 });

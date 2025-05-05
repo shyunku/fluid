@@ -34,10 +34,14 @@ export function render(element, container) {
   setRender(() => render(currentApp, currentContainer));
 
   // 최상위 Fiber 생성
-  const vnode = typeof element === "function" ? element() : element;
-  wipRoot = new Fiber(null, { children: [vnode] }, null);
+  wipRoot = new Fiber(null, {}, null);
   wipRoot.stateNode = new FiberNode(container);
   wipRoot.alternate = currentRoot;
+
+  prepareToRender(wipRoot);
+
+  const vnode = typeof element === "function" ? element() : element;
+  wipRoot.props = { children: [vnode] };
 
   deletions = [];
   nextUnitOfWork = wipRoot;

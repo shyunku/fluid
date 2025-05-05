@@ -82,3 +82,10 @@ export function removeFromArray(arr, value) {
   const index = arr.indexOf(value);
   if (index > -1) arr.splice(index, 1);
 }
+
+export function flatten(arr) {
+  if (!Array.isArray(arr)) return arr;
+  return arr.flat().reduce((acc, cur) => {
+    return acc.concat(flatten(cur));
+  }, []);
+}

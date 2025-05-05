@@ -14,7 +14,7 @@ import {
   findHostParentDom,
   findHostSiblingDom,
   insertOrAppendDom,
-} from "./dom-util.js";
+} from "./domUtil.js";
 
 let currentApp = null;
 let currentContainer = null;
@@ -22,6 +22,8 @@ let wipRoot = null; // 작업 중인 루트 Fiber
 let currentRoot = null; // 화면에 반영된 Fiber
 let deletions = []; // 삭제 대기 중인 Fiber 목록
 let nextUnitOfWork = null; // 다음 수행할 단위 작업
+
+requestIdleCallback(workLoop);
 
 /**
  * render: 루트 요소를 받아 초기 Fiber 트리를 생성하고 작업을 시작합니다.
@@ -51,23 +53,6 @@ export function render(element, container) {
 }
 
 /**
- * commitRoot: 모든 변경(삭제, 배치, 업데이트)을 DOM에 반영합니다.
- */
-function commitRoot() {
-  debug("COMMIT_ROOT", "Commit Root 시작");
-  // 1) 삭제 처리
-  deletions.forEach(commitWork);
-  // 2) 배치·업데이트 처리
-  commitWork(wipRoot.child);
-
-  currentRoot = wipRoot;
-  wipRoot = null;
-
-  runEffects();
-  debug("COMMIT_ROOT", "Commit 완료, currentRoot set to:", currentRoot);
-}
-
-/**
  * performUnitOfWork: 하나의 Fiber에 대해 beginWork → 자식 재귀 → completeWork를 수행합니다.
  */
 function performUnitOfWork(fiber) {
@@ -84,6 +69,23 @@ function performUnitOfWork(fiber) {
   }
 
   return null;
+}
+
+/**
+ * commitRoot: 모든 변경(삭제, 배치, 업데이트)을 DOM에 반영합니다.
+ */
+function commitRoot() {
+  debug("COMMIT_ROOT", "Commit Root 시작");
+  // 1) 삭제 처리
+  deletions.forEach(commitWork);
+  // 2) 배치·업데이트 처리
+  commitWork(wipRoot.child);
+
+  currentRoot = wipRoot;
+  wipRoot = null;
+
+  runEffects();
+  debug("COMMIT_ROOT", "Commit 완료, currentRoot set to:", currentRoot);
 }
 
 /**
@@ -305,6 +307,7 @@ function commitDeletion(fiber, parentDom) {
  */
 function reconcileChildren(wipFiber, elements) {
   debug("RECONCILE", "Reconciling children for:", wipFiber, elements);
+
   const existing = {};
   let oldFiber = wipFiber.alternate?.child;
   let index = 0;
@@ -375,16 +378,30 @@ function reconcileChildren(wipFiber, elements) {
   }
 }
 
+// 1) shouldYield 로 정확히 프레임을 쪼갬
+function shouldYield(start, deadline) {
+  // idleDeadline.timeRemaining()이 지원되는 브라우저 우선
+  if (deadline) return deadline.timeRemaining() < 1;
+  // fallback: 4ms 이상 점유 시 양보
+  return performance.now() - start > 4;
+}
+
 /**
  * workLoop: 유휴 시간에 performUnitOfWork를 반복 호출합니다.
  */
-function workLoop(deadline) {
+export function workLoop(deadline) {
   debug("WORK_LOOP", "workLoop tick");
-  while (nextUnitOfWork && deadline.timeRemaining() > 1) {
+  let start = performance.now();
+  while (nextUnitOfWork && !shouldYield(start, deadline)) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
   }
-  if (!nextUnitOfWork && wipRoot) commitRoot();
 
-  requestIdleCallback(workLoop);
+  if (nextUnitOfWork) {
+    requestIdleCallback(workLoop); // 잔여 작업 재예약
+  } else if (wipRoot) {
+    commitRoot();
+    if (nextUnitOfWork) {
+      requestIdleCallback(workLoop);
+    }
+  }
 }
-requestIdleCallback(workLoop);

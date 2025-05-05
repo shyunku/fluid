@@ -1,5 +1,4 @@
 import { NodeTagType, EffectType } from "./types.js";
-import { changed } from "./util.js";
 
 /* Host 부모 탐색 */
 export function findHostParentFiber(fiber) {
@@ -54,10 +53,10 @@ export function findHostSiblingDom(fiber) {
 }
 
 /* 서브트리에서 모든 Host 노드를 찾아 삽입 */
-export function insertOrAppendDom(node, before, parentDom, replace) {
+export function insertOrAppendDom(node, before, parentDom) {
   if (node.tag === NodeTagType.HOST || node.tag === NodeTagType.TEXT) {
     const target = node.stateNode?.target;
-    if (before && window.aaaa !== true) {
+    if (before) {
       parentDom.insertBefore(target, before);
     } else {
       parentDom.appendChild(target);

@@ -4,6 +4,7 @@ const app = express();
 const port = 7000;
 
 app.use(express.static("public"));
+app.use("/dist", express.static("dist"));
 
 // app.all("/", (req, res) => {
 //   res.sendFile(path.resolve(__dirname, "public/index.html"));

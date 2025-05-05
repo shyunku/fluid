@@ -1,4 +1,5 @@
 import { debug } from "./logger.js";
+import { workLoop } from "./core.js";
 
 let wipFiber = null;
 let hookIndex = 0;
@@ -16,15 +17,19 @@ export function setRender(fn) {
   renderCallback = fn;
 }
 
+function flushUpdates() {
+  // 마이크로태스크에서 한 번만 실행
+  scheduled = false;
+  renderCallback && renderCallback(); // render() 가 wipRoot·nextUnit 설정
+  /* commitRoot 과정에서 nextUnitOfWork 가 생겼을 때 바로 workLoop 예약 */
+  window.requestIdleCallback(workLoop); // 다음 idle 프레임 확보
+}
+
 export function scheduleUpdate() {
-  if (scheduled) return;
+  if (scheduled) return; // 중복 예약 방지
   scheduled = true;
-  debug("SCHEDULE_UPDATE", "scheduleUpdate called");
-  window.requestIdleCallback(() => {
-    scheduled = false;
-    debug("SCHEDULE_UPDATE", "scheduleUpdate invoking renderCallback");
-    renderCallback && renderCallback();
-  });
+  debug("SCHEDULE_UPDATE", "update batched");
+  queueMicrotask(flushUpdates); // 같은 tick 안의 setState 를 배칭
 }
 
 /**

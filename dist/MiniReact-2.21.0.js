@@ -10,14 +10,19 @@ var MiniReact = (() => {
       __defProp(target, name, { get: all[name], enumerable: true });
   };
   var __copyProps = (to, from, except, desc) => {
-    if (from && typeof from === "object" || typeof from === "function") {
+    if ((from && typeof from === "object") || typeof from === "function") {
       for (let key of __getOwnPropNames(from))
         if (!__hasOwnProp.call(to, key) && key !== except)
-          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+          __defProp(to, key, {
+            get: () => from[key],
+            enumerable:
+              !(desc = __getOwnPropDesc(from, key)) || desc.enumerable,
+          });
     }
     return to;
   };
-  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+  var __toCommonJS = (mod) =>
+    __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
   // public/mini-react/index.js
   var index_exports = {};
@@ -32,7 +37,7 @@ var MiniReact = (() => {
     useEffect: () => useEffect,
     useMemo: () => useMemo,
     useState: () => useState,
-    workLoop: () => workLoop
+    workLoop: () => workLoop,
   });
 
   // public/mini-react/types.js
@@ -40,19 +45,19 @@ var MiniReact = (() => {
     HOST: "host",
     HOST_ROOT: "host_root",
     TEXT: "text",
-    COMPONENT: "component"
+    COMPONENT: "component",
   };
   var NodeType = {
-    TEXT: "text"
+    TEXT: "text",
   };
   var NodeConnectionType = {
     CHILD: "child",
-    SIBLING: "sibling"
+    SIBLING: "sibling",
   };
   var EffectType = {
     PLACEMENT: "placement",
     UPDATE: "update",
-    DELETE: "delete"
+    DELETE: "delete",
   };
   var FiberNode = class {
     constructor(dom) {
@@ -84,7 +89,8 @@ var MiniReact = (() => {
       this.child = null;
       this.sibling = null;
       this.effectTag = null;
-      this.componentName = this.tag === NodeTagType.COMPONENT ? type.name : null;
+      this.componentName =
+        this.tag === NodeTagType.COMPONENT ? type.name : null;
       this.index = null;
     }
     static calculateTag(type) {
@@ -119,17 +125,21 @@ var MiniReact = (() => {
   // public/mini-react/h.js
   function h(type, props = {}, ...children) {
     props = props || {};
-    const normalizedChildren = flatten(children).filter((e) => e !== true && e !== false && e != null).map((child) => {
-      return typeof child === "object" ? child : {
-        type: NodeTagType.TEXT,
-        props: { nodeValue: child, children: [] },
-        key: null
-      };
-    });
+    const normalizedChildren = flatten(children)
+      .filter((e) => e !== true && e !== false && e != null)
+      .map((child) => {
+        return typeof child === "object"
+          ? child
+          : {
+              type: NodeTagType.TEXT,
+              props: { nodeValue: child, children: [] },
+              key: null,
+            };
+      });
     return {
       type,
       props: { ...props, children: normalizedChildren },
-      key: props.key || null
+      key: props.key || null,
     };
   }
 
@@ -146,7 +156,7 @@ var MiniReact = (() => {
     APPLY_PROPS: false,
     RECONCILE: false,
     USE_STATE: false,
-    SCHEDULE_UPDATE: false
+    SCHEDULE_UPDATE: false,
   };
   function debug(flag, ...args) {
     if (LogFlags.ALL && LogFlags[flag]) {
@@ -204,10 +214,12 @@ var MiniReact = (() => {
   function useEffect(effect, deps) {
     const oldHook = wipFiber.alternate?.hooks[hookIndex];
     const prevDeps = oldHook?.deps || [];
-    const hasChanged = oldHook ? !deps || deps.some((d, i) => !Object.is(d, prevDeps[i])) : true;
+    const hasChanged = oldHook
+      ? !deps || deps.some((d, i) => !Object.is(d, prevDeps[i]))
+      : true;
     const hook = {
       deps,
-      cleanup: oldHook?.cleanup
+      cleanup: oldHook?.cleanup,
     };
     if (hasChanged) {
       if (hook.cleanup) {
@@ -223,7 +235,9 @@ var MiniReact = (() => {
   }
   function useMemo(factory, deps) {
     const oldHook = wipFiber.alternate?.hooks[hookIndex];
-    const hasChanged = oldHook ? !deps || deps.some((d, i) => !Object.is(d, oldHook.deps[i])) : true;
+    const hasChanged = oldHook
+      ? !deps || deps.some((d, i) => !Object.is(d, oldHook.deps[i]))
+      : true;
     const hook = { value: null, deps };
     if (hasChanged) {
       hook.value = factory();
@@ -255,7 +269,11 @@ var MiniReact = (() => {
     let node = fiber;
     findSibling: while (node) {
       while (!node.sibling) {
-        if (!node.parent || node.parent.tag === NodeTagType.HOST_ROOT || node.parent.tag === NodeTagType.HOST)
+        if (
+          !node.parent ||
+          node.parent.tag === NodeTagType.HOST_ROOT ||
+          node.parent.tag === NodeTagType.HOST
+        )
           return null;
         node = node.parent;
       }
@@ -329,7 +347,11 @@ var MiniReact = (() => {
     currentRoot = wipRoot;
     wipRoot = null;
     runEffects();
-    debug("COMMIT_ROOT", "Commit \uC644\uB8CC, currentRoot set to:", currentRoot);
+    debug(
+      "COMMIT_ROOT",
+      "Commit \uC644\uB8CC, currentRoot set to:",
+      currentRoot
+    );
   }
   function beginWork(fiber) {
     debug("BEGIN_WORK", "beginWork:", fiber);
@@ -423,24 +445,26 @@ var MiniReact = (() => {
   }
   function applyProps(dom, props) {
     debug("APPLY_PROPS", "applyProps for:", dom, props);
-    Object.keys(props).filter((k) => k !== "children" && k !== "key" && k !== "nodeValue").forEach((name) => {
-      if (name.startsWith("on") && typeof props[name] === "function") {
-        const eventType = name.slice(2).toLowerCase();
-        debug("APPLY_PROPS", `addEventListener: ${eventType}`);
-        switch (eventType) {
-          case "change":
-            dom.addEventListener("input", props[name]);
-            break;
-          default:
-            dom.addEventListener(eventType, props[name]);
-            break;
+    Object.keys(props)
+      .filter((k) => k !== "children" && k !== "key" && k !== "nodeValue")
+      .forEach((name) => {
+        if (name.startsWith("on") && typeof props[name] === "function") {
+          const eventType = name.slice(2).toLowerCase();
+          debug("APPLY_PROPS", `addEventListener: ${eventType}`);
+          switch (eventType) {
+            case "change":
+              dom.addEventListener("input", props[name]);
+              break;
+            default:
+              dom.addEventListener(eventType, props[name]);
+              break;
+          }
+        } else if (name === "className") {
+          dom.className = props[name];
+        } else {
+          applyProp(dom, name, props[name]);
         }
-      } else if (name === "className") {
-        dom.className = props[name];
-      } else {
-        applyProp(dom, name, props[name]);
-      }
-    });
+      });
   }
   function applyProp(dom, name, value) {
     if (name === "style" && typeof value === "object") {
@@ -454,25 +478,31 @@ var MiniReact = (() => {
     }
   }
   function updateDom(dom, prevProps, nextProps) {
-    Object.keys(prevProps).filter((name) => name.startsWith("on")).forEach((name) => {
-      if (!(name in nextProps) || prevProps[name] !== nextProps[name]) {
-        dom.removeEventListener(name.slice(2).toLowerCase(), prevProps[name]);
-      }
-    });
-    Object.keys(prevProps).filter((name) => name !== "children" && !name.startsWith("on")).forEach((name) => {
-      if (!(name in nextProps)) dom[name] = "";
-    });
-    Object.keys(nextProps).filter((name) => name !== "children").forEach((name) => {
-      if (prevProps[name] === nextProps[name]) return;
-      if (name.startsWith("on") && typeof nextProps[name] === "function") {
-        const eventType = name.slice(2).toLowerCase();
-        dom.addEventListener(eventType, nextProps[name]);
-      } else if (name === "className") {
-        dom.className = nextProps[name];
-      } else {
-        dom[name] = nextProps[name];
-      }
-    });
+    Object.keys(prevProps)
+      .filter((name) => name.startsWith("on"))
+      .forEach((name) => {
+        if (!(name in nextProps) || prevProps[name] !== nextProps[name]) {
+          dom.removeEventListener(name.slice(2).toLowerCase(), prevProps[name]);
+        }
+      });
+    Object.keys(prevProps)
+      .filter((name) => name !== "children" && !name.startsWith("on"))
+      .forEach((name) => {
+        if (!(name in nextProps)) dom[name] = "";
+      });
+    Object.keys(nextProps)
+      .filter((name) => name !== "children")
+      .forEach((name) => {
+        if (prevProps[name] === nextProps[name]) return;
+        if (name.startsWith("on") && typeof nextProps[name] === "function") {
+          const eventType = name.slice(2).toLowerCase();
+          dom.addEventListener(eventType, nextProps[name]);
+        } else if (name === "className") {
+          dom.className = nextProps[name];
+        } else {
+          dom[name] = nextProps[name];
+        }
+      });
   }
   function commitDeletion(fiber, parentDom) {
     if (!fiber) return;

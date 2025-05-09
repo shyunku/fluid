@@ -1,9 +1,13 @@
-const { h, render, useEffect, useMemo, useState } = MiniReact;
+import { h } from "../../src/react/h.js";
+import { render } from "../../src/react/core.js";
+import { useEffect, useMemo, useState } from "../../src/react/hooks.js";
 
 const App = () => {
+  const [rootIndex, setRootIndex] = useState(0);
+
   return h(SubItem, {
     id: `0`,
-    index: 0,
+    index: rootIndex,
     indexEnd: 0,
     parentId: null,
     depth: 0,

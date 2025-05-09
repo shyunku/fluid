@@ -5,13 +5,11 @@ const port = 7000;
 
 app.use(express.static("public"));
 app.use("/dist", express.static("dist"));
+app.use("/src", express.static("src"));
+app.use("/test", express.static("test"));
 
-// app.all("/", (req, res) => {
-//   res.sendFile(path.resolve(__dirname, "public/index.html"));
-// });
-
-app.all("/dist/bundle.js", (req, res) => {
-  res.sendFile(path.resolve(__dirname, "dist/bundle.js"));
+app.all("/", (req, res) => {
+  res.sendFile(path.resolve(__dirname, "public/react/index.html"));
 });
 
 app.listen(port, () => {

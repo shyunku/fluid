@@ -1,9 +1,10 @@
-import {
+const {
   useState,
   useEffect,
   useMemo,
   render,
-} from "../../dist/MiniReact-2.21.1.js";
+  h,
+} = MiniReact;
 
 export const App = () => {
   return (

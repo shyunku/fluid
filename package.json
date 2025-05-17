@@ -1,11 +1,11 @@
 {
   "name": "mini-react",
-  "version": "2.20.2",
+  "version": "2.21.1",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "build": "esbuild public/mini-react/index.js --format=iife --global-name=MiniReact --bundle --outfile=dist/MiniReact-$npm_package_version.js --banner:js=\"/* MiniReact v$npm_package_version */\n\""
+    "build": "esbuild src/react/index.js --format=iife --global-name=MiniReact --bundle --outfile=dist/MiniReact-$npm_package_version.js --banner:js=\"/* MiniReact v$npm_package_version */\n\""
   },
   "author": "",
   "license": "ISC",

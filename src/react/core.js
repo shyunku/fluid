@@ -284,7 +284,7 @@ function updateDom(dom, prevProps, nextProps) {
       } else if (name === "className") {
         dom.className = nextProps[name];
       } else {
-        dom[name] = nextProps[name];
+        applyProp(dom, name, nextProps[name]);
       }
     });
 }

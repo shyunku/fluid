@@ -1,10 +1,4 @@
-const {
-  useState,
-  useEffect,
-  useMemo,
-  render,
-  h,
-} = MiniReact;
+const { useState, useEffect, useMemo, render, h } = MiniReact;
 
 export const App = () => {
   return (

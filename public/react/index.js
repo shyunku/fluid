@@ -60,7 +60,7 @@ const SubItem = ({
     "div",
     {
       className: "item",
-      style: `margin-left: ${20}px`,
+      style: { marginLeft: `${20}px` },
       id: `item_${thisId?.replace(/\./g, "_") ?? "unknown"}`,
     },
     h(

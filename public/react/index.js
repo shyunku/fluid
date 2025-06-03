@@ -47,6 +47,8 @@ const SubItem = ({
     });
   };
 
+  console.log(`${thisId} rendered`, items);
+
   useEffect(() => {
     // let t = setInterval(() => {
     //   setDuration(Date.now() - startTime);
@@ -60,7 +62,7 @@ const SubItem = ({
     "div",
     {
       className: "item",
-      style: { marginLeft: `${20}px` },
+      style: `margin-left: ${20}px`,
       id: `item_${thisId?.replace(/\./g, "_") ?? "unknown"}`,
     },
     h(
@@ -96,4 +98,5 @@ const SubItem = ({
     )
   );
 };
+
 render(App, document.getElementById("root"));

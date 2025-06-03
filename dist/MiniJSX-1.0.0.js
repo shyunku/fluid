@@ -1,6 +1,103 @@
-/* MiniJSX v2.21.2 */
+/* MiniJSX v1.0.0 */
 var MiniJSX = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
   // src/jsx/index.js
+  var index_exports = {};
+
+  // src/jsx/prettifier.js
+  function prettify(code, indentWidth = 2) {
+    const pad = (n) => " ".repeat(indentWidth * n);
+    let out = "";
+    let quote = null;
+    let paren = 0;
+    let brace = 0;
+    let skipWS = false;
+    const hStack = [];
+    for (let i = 0; i < code.length; i++) {
+      let ch = code[i];
+      if (skipWS) {
+        if (/\s/.test(ch)) continue;
+        skipWS = false;
+      }
+      if (quote) {
+        out += ch;
+        if (ch === quote && code[i - 1] !== "\\") quote = null;
+        continue;
+      }
+      if (ch === "'" || ch === '"' || ch === "`") {
+        quote = ch;
+        out += ch;
+        continue;
+      }
+      if (code.startsWith("h(", i)) {
+        out += "h(";
+        i += 1;
+        paren++;
+        hStack.push({ depth: paren, argIdx: 0 });
+        continue;
+      }
+      if (ch === "{") {
+        brace++;
+        out += ch;
+        continue;
+      }
+      if (ch === "}") {
+        brace--;
+        out += ch;
+        continue;
+      }
+      if (ch === "," && brace === 0 && hStack.length && paren === hStack[hStack.length - 1].depth) {
+        const frame = hStack[hStack.length - 1];
+        frame.argIdx++;
+        if (frame.argIdx === 1) {
+          out += ", ";
+        } else {
+          out += ",\n" + pad(hStack.length + 1);
+          skipWS = true;
+        }
+        continue;
+      }
+      if (ch === "(") {
+        paren++;
+        out += ch;
+        continue;
+      }
+      if (ch === ")") {
+        if (hStack.length && paren === hStack[hStack.length - 1].depth) {
+          const frame = hStack[hStack.length - 1];
+          if (frame.argIdx > 1) {
+            out += "\n" + pad(hStack.length) + ")";
+          } else {
+            out += ")";
+          }
+          hStack.pop();
+          skipWS = true;
+          paren--;
+          continue;
+        }
+        paren--;
+        out += ")";
+        continue;
+      }
+      out += ch;
+    }
+    return out.trim();
+  }
+
+  // src/jsx/core.js
   (function() {
     const SYM = {
       LT: "<",
@@ -328,7 +425,7 @@ var MiniJSX = (() => {
           if (source[offset] === ";") offset++;
           continue;
         }
-        const compiled = gen(parse(inner));
+        const compiled = prettify(gen(parse(inner)));
         out += source.slice(offset, start) + compiled;
         let nextPos = endIdx + 1;
         if (source[nextPos] === ";") nextPos++;
@@ -342,4 +439,5 @@ var MiniJSX = (() => {
       document.head.appendChild(tag);
     });
   })();
+  return __toCommonJS(index_exports);
 })();

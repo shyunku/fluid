@@ -1,5 +1,4 @@
-/* MiniReact v2.20.2 */
-
+/* MiniReact v2.22.0 */
 var MiniReact = (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -19,7 +18,7 @@ var MiniReact = (() => {
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // public/mini-react/index.js
+  // src/react/index.js
   var index_exports = {};
   __export(index_exports, {
     h: () => h,
@@ -31,10 +30,11 @@ var MiniReact = (() => {
     useCallback: () => useCallback,
     useEffect: () => useEffect,
     useMemo: () => useMemo,
-    useState: () => useState
+    useState: () => useState,
+    workLoop: () => workLoop
   });
 
-  // public/mini-react/types.js
+  // src/react/types.js
   var NodeTagType = {
     HOST: "host",
     HOST_ROOT: "host_root",
@@ -94,7 +94,7 @@ var MiniReact = (() => {
     }
   };
 
-  // public/mini-react/util.js
+  // src/react/util.js
   function changed(a, b) {
     if (a === b) return false;
     if (a == null || b == null) return a !== b;
@@ -115,7 +115,7 @@ var MiniReact = (() => {
     }, []);
   }
 
-  // public/mini-react/h.js
+  // src/react/h.js
   function h(type, props = {}, ...children) {
     props = props || {};
     const normalizedChildren = flatten(children).filter((e) => e !== true && e !== false && e != null).map((child) => {
@@ -132,9 +132,9 @@ var MiniReact = (() => {
     };
   }
 
-  // public/mini-react/logger.js
+  // src/react/logger.js
   var LogFlags = {
-    ALL: false,
+    ALL: true,
     RENDER: false,
     BEGIN_WORK: false,
     COMPLETE_WORK: false,
@@ -153,7 +153,7 @@ var MiniReact = (() => {
     }
   }
 
-  // public/mini-react/hooks.js
+  // src/react/hooks.js
   var wipFiber = null;
   var hookIndex = 0;
   var renderCallback = null;
@@ -167,15 +167,16 @@ var MiniReact = (() => {
   function setRender(fn) {
     renderCallback = fn;
   }
+  function flushUpdates() {
+    scheduled = false;
+    renderCallback && renderCallback();
+    window.requestIdleCallback(workLoop);
+  }
   function scheduleUpdate() {
     if (scheduled) return;
     scheduled = true;
-    debug("SCHEDULE_UPDATE", "scheduleUpdate called");
-    window.requestIdleCallback(() => {
-      scheduled = false;
-      debug("SCHEDULE_UPDATE", "scheduleUpdate invoking renderCallback");
-      renderCallback && renderCallback();
-    });
+    debug("SCHEDULE_UPDATE", "update batched");
+    queueMicrotask(flushUpdates);
   }
   function runEffects() {
     pendingEffects.forEach((fn) => fn());
@@ -236,7 +237,7 @@ var MiniReact = (() => {
     return useMemo(() => callback, deps);
   }
 
-  // public/mini-react/dom-util.js
+  // src/react/domUtil.js
   function findHostParentFiber(fiber) {
     let p = fiber.parent;
     while (p && p.tag !== NodeTagType.HOST && p.tag !== NodeTagType.HOST_ROOT) {
@@ -268,10 +269,10 @@ var MiniReact = (() => {
     }
     return null;
   }
-  function insertOrAppendDom(node, before, parentDom, replace) {
+  function insertOrAppendDom(node, before, parentDom) {
     if (node.tag === NodeTagType.HOST || node.tag === NodeTagType.TEXT) {
       const target = node.stateNode?.target;
-      if (before && window.aaaa !== true) {
+      if (before) {
         parentDom.insertBefore(target, before);
       } else {
         parentDom.appendChild(target);
@@ -285,13 +286,18 @@ var MiniReact = (() => {
     }
   }
 
-  // public/mini-react/core.js
+  // src/react/core.js
+  var requestIdleCallback = window.requestIdleCallback || function(cb) {
+    return requestAnimationFrame(() => cb({ timeRemaining: () => 1 }));
+  };
   var currentApp = null;
   var currentContainer = null;
   var wipRoot = null;
   var currentRoot = null;
   var deletions = [];
   var nextUnitOfWork = null;
+  var workLoopScheduled = false;
+  requestIdleCallback(workLoop);
   function render(element, container) {
     currentApp = element;
     currentContainer = container;
@@ -304,17 +310,9 @@ var MiniReact = (() => {
     wipRoot.props = { children: [vnode] };
     deletions = [];
     nextUnitOfWork = wipRoot;
+    ensureWorkLoop();
     debug("RENDER", "Render initialized:", wipRoot);
     window.vroot = wipRoot;
-  }
-  function commitRoot() {
-    debug("COMMIT_ROOT", "Commit Root \uC2DC\uC791");
-    deletions.forEach(commitWork);
-    commitWork(wipRoot.child);
-    currentRoot = wipRoot;
-    wipRoot = null;
-    runEffects();
-    debug("COMMIT_ROOT", "Commit \uC644\uB8CC, currentRoot set to:", currentRoot);
   }
   function performUnitOfWork(fiber) {
     debug("PERFORM_UNIT", "performUnitOfWork on:", fiber);
@@ -327,6 +325,15 @@ var MiniReact = (() => {
       next = next.parent;
     }
     return null;
+  }
+  function commitRoot() {
+    debug("COMMIT_ROOT", "Commit Root \uC2DC\uC791");
+    deletions.forEach(commitWork);
+    commitWork(wipRoot.child);
+    currentRoot = wipRoot;
+    wipRoot = null;
+    runEffects();
+    debug("COMMIT_ROOT", "Commit \uC644\uB8CC, currentRoot set to:", currentRoot);
   }
   function beginWork(fiber) {
     debug("BEGIN_WORK", "beginWork:", fiber);
@@ -467,7 +474,7 @@ var MiniReact = (() => {
       } else if (name === "className") {
         dom.className = nextProps[name];
       } else {
-        dom[name] = nextProps[name];
+        applyProp(dom, name, nextProps[name]);
       }
     });
   }
@@ -535,14 +542,31 @@ var MiniReact = (() => {
       deletions.push(fiberToDelete);
     }
   }
+  function shouldYield(start, deadline) {
+    if (deadline) return deadline.timeRemaining() < 1;
+    return performance.now() - start > 4;
+  }
+  function ensureWorkLoop() {
+    if (!workLoopScheduled) {
+      workLoopScheduled = true;
+      requestIdleCallback(workLoop);
+    }
+  }
   function workLoop(deadline) {
+    workLoopScheduled = false;
     debug("WORK_LOOP", "workLoop tick");
-    while (nextUnitOfWork && deadline.timeRemaining() > 1) {
+    let start = performance.now();
+    while (nextUnitOfWork && !shouldYield(start, deadline)) {
       nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
     }
-    if (!nextUnitOfWork && wipRoot) commitRoot();
-    requestIdleCallback(workLoop);
+    if (nextUnitOfWork) {
+      ensureWorkLoop();
+    } else if (wipRoot) {
+      commitRoot();
+      if (nextUnitOfWork) {
+        ensureWorkLoop();
+      }
+    }
   }
-  requestIdleCallback(workLoop);
   return __toCommonJS(index_exports);
 })();

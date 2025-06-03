@@ -1,12 +1,15 @@
 {
   "name": "mini-react",
-  "version": "2.21.2",
+  "version": "2.22.0",
+  "config": {
+    "jsxVersion": "1.0.0"
+  },
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
     "build": "esbuild src/react/index.js --format=iife --global-name=MiniReact --bundle --outfile=dist/MiniReact-%npm_package_version%.js --banner:js=\"/* MiniReact v%npm_package_version% */\n\"",
-    "build/jsx": "esbuild src/jsx/index.js --format=iife --global-name=MiniJSX --bundle --outfile=dist/MiniJSX-%npm_package_version%.js --banner:js=\"/* MiniJSX v%npm_package_version% */\n\""
+    "build/jsx": "esbuild src/jsx/index.js --format=iife --global-name=MiniJSX --bundle --outfile=dist/MiniJSX-%npm_package_config_jsxVersion%.js --banner:js=\"/* MiniJSX v%npm_package_config_jsxVersion% */\n\""
   },
   "author": "",
   "license": "ISC",

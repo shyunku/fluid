@@ -1,3 +1,5 @@
+import { prettify } from "./prettifier.js";
+
 /**
  * Runtime JSX → h() transformer using vanilla JavaScript
  * Implements: tokenizer → recursive-descent parser → AST → code generator
@@ -337,46 +339,6 @@
         return { code: str.slice(open + 1, i), endIdx: i };
     }
     throw Error("unbalanced");
-  }
-
-  function prettify(code) {
-    return code;
-    const indentWidth = 2;
-    let out = "";
-    let indent = 1;
-
-    const tab = () => {
-      indent++;
-    };
-    const untab = () => {
-      indent = Math.max(0, indent - 1);
-    };
-    const pad = () => " ".repeat(indentWidth * indent);
-    const trimLeft = (i) => {
-      let j = i + 1;
-      while (code[j] === " ") j++;
-      return j - i;
-    };
-
-    for (let i = 0; i < code.length; i++) {
-      const ch = code[i];
-
-      if (ch === "}") {
-        untab();
-        out += "\n" + pad() + "}";
-        continue;
-      } else if (ch === "{") {
-        tab();
-        out += "{\n" + pad();
-        continue;
-      } else if (ch === ",") {
-        out += ",\n" + pad();
-        continue;
-      }
-
-      out += ch;
-    }
-    return out;
   }
 
   /*────────────────── Runtime Transformer ──────────────────*/

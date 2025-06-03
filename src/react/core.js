@@ -16,12 +16,19 @@ import {
   insertOrAppendDom,
 } from "./domUtil.js";
 
+const requestIdleCallback =
+  window.requestIdleCallback ||
+  function (cb) {
+    return requestAnimationFrame(() => cb({ timeRemaining: () => 1 }));
+  };
+
 let currentApp = null;
 let currentContainer = null;
 let wipRoot = null; // 작업 중인 루트 Fiber
 let currentRoot = null; // 화면에 반영된 Fiber
 let deletions = []; // 삭제 대기 중인 Fiber 목록
 let nextUnitOfWork = null; // 다음 수행할 단위 작업
+let workLoopScheduled = false;
 
 requestIdleCallback(workLoop);
 
@@ -47,8 +54,9 @@ export function render(element, container) {
 
   deletions = [];
   nextUnitOfWork = wipRoot;
-  debug("RENDER", "Render initialized:", wipRoot);
+  ensureWorkLoop();
 
+  debug("RENDER", "Render initialized:", wipRoot);
   window.vroot = wipRoot;
 }
 
@@ -386,10 +394,18 @@ function shouldYield(start, deadline) {
   return performance.now() - start > 4;
 }
 
+function ensureWorkLoop() {
+  if (!workLoopScheduled) {
+    workLoopScheduled = true;
+    requestIdleCallback(workLoop);
+  }
+}
+
 /**
  * workLoop: 유휴 시간에 performUnitOfWork를 반복 호출합니다.
  */
 export function workLoop(deadline) {
+  workLoopScheduled = false;
   debug("WORK_LOOP", "workLoop tick");
   let start = performance.now();
   while (nextUnitOfWork && !shouldYield(start, deadline)) {
@@ -397,11 +413,11 @@ export function workLoop(deadline) {
   }
 
   if (nextUnitOfWork) {
-    requestIdleCallback(workLoop); // 잔여 작업 재예약
+    ensureWorkLoop(); // 잔여 작업이 있으면 다음 idle 시점에 계속 수행
   } else if (wipRoot) {
     commitRoot();
     if (nextUnitOfWork) {
-      requestIdleCallback(workLoop);
+      ensureWorkLoop(); // commitRoot 후에도 다음 작업이 있으면 계속
     }
   }
 }

@@ -1,4 +1,4 @@
-import { NodeTagType } from "./types.js";
+import { NodeTagType, VNode } from "./types.js";
 import { flatten } from "./util.js";
 
 export function h(type, props = {}, ...children) {
@@ -8,15 +8,12 @@ export function h(type, props = {}, ...children) {
     .map((child) => {
       return typeof child === "object"
         ? child
-        : {
-            type: NodeTagType.TEXT,
-            props: { nodeValue: child, children: [] },
-            key: null,
-          };
+        : new VNode(NodeTagType.TEXT, { nodeValue: child, children: [] }, null);
     });
-  return {
+
+  return new VNode(
     type,
-    props: { ...props, children: normalizedChildren },
-    key: props.key || null,
-  };
+    { ...props, children: normalizedChildren },
+    props.key || null
+  );
 }

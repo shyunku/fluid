@@ -20,6 +20,14 @@ export const EffectType = {
   DELETE: "delete",
 };
 
+export class VNode {
+  constructor(type, props, key) {
+    this.type = type;
+    this.props = props;
+    this.key = key;
+  }
+}
+
 export class FiberNode {
   constructor(dom) {
     this.target = dom; // 실제 DOM 요소

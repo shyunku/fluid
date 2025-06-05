@@ -6,7 +6,7 @@ import {
   EffectType,
 } from "./types.js";
 import { h } from "./h.js";
-import { prepareToRender, runEffects, setRender } from "./hooks.js";
+import { prepareToRender, runEffects } from "./hooks.js";
 import { debug } from "./logger.js";
 import { changed, changedLog, removeFromArray } from "./util.js";
 import {
@@ -15,49 +15,54 @@ import {
   findHostSiblingDom,
   insertOrAppendDom,
 } from "./domUtil.js";
+import { Cache } from "./cache.js";
 
-const requestIdleCallback =
-  window.requestIdleCallback ||
-  function (cb) {
-    return requestAnimationFrame(() => cb({ timeRemaining: () => 1 }));
-  };
+initialize();
 
-let currentApp = null;
-let currentContainer = null;
-let wipRoot = null; // 작업 중인 루트 Fiber
-let currentRoot = null; // 화면에 반영된 Fiber
-let deletions = []; // 삭제 대기 중인 Fiber 목록
-let nextUnitOfWork = null; // 다음 수행할 단위 작업
-let workLoopScheduled = false;
-
-requestIdleCallback(workLoop);
+/**
+ * 초기화
+ * - requestIdleCallback 대체
+ * - renderFunc 설정
+ * - 초기 렌더링 예약
+ */
+function initialize() {
+  window.requestIdleCallback =
+    window.requestIdleCallback ||
+    function (cb) {
+      return requestAnimationFrame(() => cb({ timeRemaining: () => 1 }));
+    };
+  Cache.renderFunc = render;
+  requestIdleCallback(workLoop);
+}
 
 /**
  * render: 루트 요소를 받아 초기 Fiber 트리를 생성하고 작업을 시작합니다.
  */
-export function render(element, container) {
-  currentApp = element;
-  currentContainer = container;
-
-  // 재렌더링 콜백 등록
-  setRender(() => render(currentApp, currentContainer));
+export function render(
+  component = Cache.rootComponent,
+  container = Cache.rootTarget
+) {
+  if (!Cache.rootComponent && !Cache.rootTarget) {
+    Cache.rootComponent = component;
+    Cache.rootTarget = container;
+  }
 
   // 최상위 Fiber 생성
-  wipRoot = new Fiber(null, {}, null);
-  wipRoot.stateNode = new FiberNode(container);
-  wipRoot.alternate = currentRoot;
+  Cache.rootFiber = new Fiber(null, {}, null);
+  Cache.rootFiber.stateNode = new FiberNode(container);
+  Cache.rootFiber.alternate = Cache.currentRoot;
 
-  prepareToRender(wipRoot);
+  prepareToRender(Cache.rootFiber);
 
-  const vnode = typeof element === "function" ? element() : element;
-  wipRoot.props = { children: [vnode] };
+  const vnode = typeof component === "function" ? component() : component;
+  Cache.rootFiber.props = { children: [vnode] };
 
-  deletions = [];
-  nextUnitOfWork = wipRoot;
+  Cache.deletions = [];
+  Cache.nextUnitOfWork = Cache.rootFiber;
   ensureWorkLoop();
 
-  debug("RENDER", "Render initialized:", wipRoot);
-  window.vroot = wipRoot;
+  debug("RENDER", "Render initialized:", Cache.rootFiber);
+  window.vroot = Cache.rootFiber;
 }
 
 /**
@@ -85,15 +90,15 @@ function performUnitOfWork(fiber) {
 function commitRoot() {
   debug("COMMIT_ROOT", "Commit Root 시작");
   // 1) 삭제 처리
-  deletions.forEach(commitWork);
+  Cache.deletions.forEach(commitWork);
   // 2) 배치·업데이트 처리
-  commitWork(wipRoot.child);
+  commitWork(Cache.rootFiber.child);
 
-  currentRoot = wipRoot;
-  wipRoot = null;
+  Cache.currentRoot = Cache.rootFiber;
+  Cache.rootFiber = null;
 
   runEffects();
-  debug("COMMIT_ROOT", "Commit 완료, currentRoot set to:", currentRoot);
+  debug("COMMIT_ROOT", "Commit 완료, currentRoot set to:", Cache.currentRoot);
 }
 
 /**
@@ -347,7 +352,7 @@ function reconcileChildren(wipFiber, elements) {
       newFiber.index = newIndex;
 
       if (sameFiber.index < lastPlacedIndex) {
-        // 앞쪽에 이미 고정된 노드가 있으므로, 이 노드는 앞으로 ‘이동’해야 함
+        // 앞쪽에 이미 고정된 노드가 있으므로, 이 노드는 앞으로 '이동'해야 함
         newFiber.effectTag = EffectType.PLACEMENT;
       } else {
         lastPlacedIndex = sameFiber.index; // 오른쪽 끝 갱신
@@ -362,7 +367,7 @@ function reconcileChildren(wipFiber, elements) {
     if (sameFiber && !newFiber) {
       // 삭제
       sameFiber.effectTag = EffectType.DELETE;
-      deletions.push(sameFiber);
+      Cache.deletions.push(sameFiber);
     }
 
     if (newIndex === 0) {
@@ -382,7 +387,7 @@ function reconcileChildren(wipFiber, elements) {
   for (const key in existing) {
     const fiberToDelete = existing[key];
     fiberToDelete.effectTag = EffectType.DELETE;
-    deletions.push(fiberToDelete);
+    Cache.deletions.push(fiberToDelete);
   }
 }
 
@@ -395,8 +400,8 @@ function shouldYield(start, deadline) {
 }
 
 function ensureWorkLoop() {
-  if (!workLoopScheduled) {
-    workLoopScheduled = true;
+  if (!Cache.workLoopScheduled) {
+    Cache.workLoopScheduled = true;
     requestIdleCallback(workLoop);
   }
 }
@@ -405,18 +410,18 @@ function ensureWorkLoop() {
  * workLoop: 유휴 시간에 performUnitOfWork를 반복 호출합니다.
  */
 export function workLoop(deadline) {
-  workLoopScheduled = false;
+  Cache.workLoopScheduled = false;
   debug("WORK_LOOP", "workLoop tick");
   let start = performance.now();
-  while (nextUnitOfWork && !shouldYield(start, deadline)) {
-    nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+  while (Cache.nextUnitOfWork && !shouldYield(start, deadline)) {
+    Cache.nextUnitOfWork = performUnitOfWork(Cache.nextUnitOfWork);
   }
 
-  if (nextUnitOfWork) {
+  if (Cache.nextUnitOfWork) {
     ensureWorkLoop(); // 잔여 작업이 있으면 다음 idle 시점에 계속 수행
-  } else if (wipRoot) {
+  } else if (Cache.rootFiber) {
     commitRoot();
-    if (nextUnitOfWork) {
+    if (Cache.nextUnitOfWork) {
       ensureWorkLoop(); // commitRoot 후에도 다음 작업이 있으면 계속
     }
   }

@@ -46,4 +46,12 @@ export class Fiber {
     if (typeof type === "string") return NodeTagType.HOST;
     return NodeTagType.COMPONENT;
   }
+
+  clone() {
+    const newFiber = new Fiber(this.type, this.props, this.key);
+    newFiber.stateNode = this.stateNode;
+    newFiber.alternate = this;
+    newFiber.hooks = this.hooks;
+    return newFiber;
+  }
 }

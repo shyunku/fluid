@@ -1,7 +1,7 @@
 import { Fiber, NodeTagType, EffectType, VNode } from "./types.js";
 import { prepareToRender, runEffects } from "./hooks.js";
-import { debug } from "./logger.js";
-import { changed, changedLog, removeFromArray } from "./util.js";
+import { debug, warn } from "./logger.js";
+import { changed } from "./util.js";
 import {
   findHostParentDom,
   findHostSiblingDom,
@@ -57,7 +57,7 @@ export function render(element, container) {
   ensureWorkLoop();
 
   debug("RENDER", "Render initialized:", Cache.rootFiber);
-  window.vroot = Cache.rootFiber;
+  window.rootFiber = Cache.rootFiber;
 }
 
 /**
@@ -108,6 +108,7 @@ function commitRoot() {
  */
 function beginWork(fiber) {
   debug("BEGIN_WORK", "beginWork:", fiber);
+  // console.log(fiber);
 
   switch (fiber.tag) {
     case NodeTagType.TEXT: {
@@ -135,7 +136,11 @@ function beginWork(fiber) {
           !changed(fiber.props, alternate.props) &&
           !hasPendingUpdates
         ) {
-          debug("BAILOUT", "Cloning children for:", fiber.componentName);
+          debug(
+            "BEGIN_WORK",
+            "Bailout: Cloning children for",
+            fiber.componentName
+          );
 
           let currentChild = alternate.child;
           if (!currentChild) {
@@ -146,13 +151,7 @@ function beginWork(fiber) {
           let prevNewFiber = null;
 
           while (currentChild) {
-            const newFiber = new Fiber(
-              currentChild.type,
-              currentChild.props,
-              currentChild.key
-            );
-            newFiber.stateNode = currentChild.stateNode;
-            newFiber.alternate = currentChild;
+            const newFiber = currentChild.clone();
             newFiber.parent = fiber;
 
             if (prevNewFiber === null) {
@@ -167,6 +166,8 @@ function beginWork(fiber) {
           fiber.child = firstNewFiber;
           break;
         }
+
+        //console.log("update", fiber.componentName, fiber.props);
 
         debug("BEGIN_WORK", "Component render for", fiber.componentName);
         prepareToRender(fiber);
@@ -257,6 +258,13 @@ function commitPlacement(fiber) {
     console.error("Cannot find parent DOM for placement:", fiber);
     return;
   }
+
+  // 컴포넌트 파이버는 DOM 노드가 없으므로 건너뛰고,
+  // commitWork의 재귀가 자식들을 처리하도록 합니다.
+  // if (fiber.tag !== NodeTagType.HOST && fiber.tag !== NodeTagType.TEXT) {
+  //   return;
+  // }
+
   const beforeDom = findHostSiblingDom(fiber);
 
   debug("COMMIT_WORK", "Placement:", fiber, parentDom, beforeDom);
@@ -421,20 +429,34 @@ function updateDom(dom, prevProps, nextProps) {
  * reconcileChildren: key를 활용해 이전 Fiber와 매칭하고,
  * 타입/키가 같으면 업데이트, 새로 추가되거나 삭제가 필요한 노드를 처리합니다.
  * @param {Fiber} wipFiber
- * @param {VNode[]} elements
+ * @param {VNode[]} vnodes
  * @returns {void}
  */
-function reconcileChildren(wipFiber, elements) {
-  debug("RECONCILE", "Reconciling children for:", wipFiber, elements);
+function reconcileChildren(wipFiber, vnodes) {
+  debug("RECONCILE", "Reconciling children for:", wipFiber, vnodes);
 
   const existing = {};
   let oldFiber = wipFiber.alternate?.child;
   let index = 0;
 
+  const keyCount = {};
   const explicitKeys = new Set();
-  elements.forEach((element) => {
-    if (element?.props?.key !== null && element?.props?.key !== undefined) {
-      explicitKeys.add(element.props.key);
+  vnodes.forEach((vnode) => {
+    const key = vnode?.props?.key;
+    if (key !== null && key !== undefined) {
+      explicitKeys.add(key);
+      keyCount[key] = (keyCount[key] || 0) + 1;
+    }
+  });
+
+  // 명시적 key 중복 체크 및 경고 출력
+  Object.entries(keyCount).forEach(([key, count]) => {
+    if (count > 1) {
+      warn(
+        "RECONCILE",
+        `key "${key}"가 자식들 사이에서 중복되었습니다.`,
+        wipFiber
+      );
     }
   });
 
@@ -456,8 +478,8 @@ function reconcileChildren(wipFiber, elements) {
   let prevSibling = null;
   let lastPlacedIndex = 0;
 
-  for (const element of elements) {
-    let key = element.props.key;
+  for (const vnode of vnodes) {
+    let key = vnode.props.key;
     if (key === null || key === undefined) {
       key = newIndex;
       if (explicitKeys.has(key)) {
@@ -467,10 +489,9 @@ function reconcileChildren(wipFiber, elements) {
     const sameFiber = existing[key];
     let newFiber = null;
 
-    if (sameFiber && element.type === sameFiber.type) {
-      newFiber = new Fiber(sameFiber.type, element.props, key);
-      newFiber.stateNode = sameFiber.stateNode;
-      newFiber.alternate = sameFiber;
+    if (sameFiber && vnode.type === sameFiber.type) {
+      newFiber = sameFiber.clone();
+      newFiber.props = vnode.props; // 새로운 props 적용
       newFiber.effectTag = EffectType.UPDATE;
       newFiber.index = newIndex;
 
@@ -480,8 +501,8 @@ function reconcileChildren(wipFiber, elements) {
         lastPlacedIndex = sameFiber.index;
       }
       delete existing[key];
-    } else if (element) {
-      newFiber = new Fiber(element.type, element.props, key);
+    } else if (vnode) {
+      newFiber = new Fiber(vnode.type, vnode.props, key);
       newFiber.effectTag = EffectType.PLACEMENT;
       newFiber.index = newIndex;
     }

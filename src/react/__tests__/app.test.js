@@ -12,6 +12,40 @@ global.requestIdleCallback = (callback) => {
   return 1;
 };
 
+const $item = (id) => {
+  const realId = id.replace(/\./g, "_");
+  const item = document.querySelector(`div#item_${realId}`);
+  if (!item) {
+    throw new Error(`Item with id ${id} not found`);
+  }
+  return item;
+};
+
+const $upButton = (id) => {
+  const item = $item(id);
+  return item.querySelector(".header > button.up");
+};
+
+const $downButton = (id) => {
+  const item = $item(id);
+  return item.querySelector(".header > button.down");
+};
+
+const $addChildButton = (id) => {
+  const item = $item(id);
+  return item.querySelector(".header > button.add-child");
+};
+
+const $removeChildButton = (id) => {
+  const item = $item(id);
+  return item.querySelector(".header > button.remove");
+};
+
+const $child = (id, index) => {
+  const item = $item(id);
+  return item.querySelector(`.item-list > .item:nth-child(${index + 1})`);
+};
+
 describe("Mini-React Application Test", () => {
   // 각 테스트가 실행되기 전 환경 설정
   beforeEach(() => {
@@ -43,115 +77,109 @@ describe("Mini-React Application Test", () => {
   });
 
   test("should render initial components correctly", () => {
-    const rootDiv = document.getElementById("root");
-    expect(rootDiv.innerHTML).toContain("id: 0");
-    expect(rootDiv.querySelector("button").textContent).toBe("add child");
+    expect($item("0").innerHTML).toContain("id: 0");
+    expect($addChildButton("0").textContent).toBe("child");
     // 초기에는 .item이 하나만 있어야 함
-    expect(rootDiv.querySelectorAll(".item").length).toBe(1);
+    expect($item("0").querySelectorAll(".item").length).toBe(0);
   });
 
-  test("should create child when 'add child' button is clicked", async () => {
-    const rootDiv = document.getElementById("root");
-    const addChildButton = rootDiv.querySelector("button");
-
+  test("should create child when 'child' button is clicked", async () => {
     // 초기 상태 확인
-    expect(rootDiv.querySelectorAll(".item").length).toBe(1);
+    expect($item("0").querySelectorAll(".item").length).toBe(0);
 
     // 버튼 클릭 이벤트 시뮬레이션
-    addChildButton.click();
+    $addChildButton("0").click();
 
     // setState -> scheduleUpdate -> queueMicrotask(flushUpdates)
     // microtask가 실행될 때까지 기다림
     await flushMicrotasks();
 
     // 리렌더링 후 DOM 상태 확인
-    expect(rootDiv.querySelectorAll(".item").length).toBe(2);
-    expect(rootDiv.innerHTML).toContain("id: 0.1");
+    expect($item("0").querySelectorAll(".item").length).toBe(1);
+    expect($item("0").innerHTML).toContain("id: 0.1");
   });
 
-  test("should create valid children when 'add child' button is clicked multiple times", async () => {
-    const rootDiv = document.getElementById("root");
-    const addChildButton = rootDiv.querySelector("button");
-
+  test("should create valid children when 'child' button is clicked multiple times", async () => {
     // 초기 상태 확인
-    expect(rootDiv.querySelectorAll(".item").length).toBe(1);
+    expect($item("0").querySelectorAll(".item").length).toBe(0);
 
     for (let i = 0; i < 10; i++) {
-      addChildButton.click();
+      $addChildButton("0").click();
       await flushMicrotasks();
     }
 
-    expect(rootDiv.querySelectorAll(".item").length).toBe(11);
+    expect($item("0.10")).not.toBeNull();
   });
 
   test("should create valid nested children", async () => {
-    const rootDiv = document.getElementById("root");
-
-    const getFirstElementByDepth = (depth) => {
-      const id = "0" + ".1".repeat(depth);
-      const realId = id.replace(/\./g, "_");
-      return rootDiv.querySelector(`#item_${realId}`);
-    };
-
     for (let i = 0; i < 10; i++) {
-      const nextButton =
-        getFirstElementByDepth(i).querySelector("button.add-child");
-      nextButton.click();
+      $addChildButton("0" + ".1".repeat(i)).click();
       await flushMicrotasks();
     }
 
-    const lastChild = getFirstElementByDepth(10);
-
-    expect(lastChild).toBeDefined();
-    expect(lastChild.innerHTML).toContain(`id: ${"0" + ".1".repeat(10)}`);
+    expect($item("0" + ".1".repeat(10)).innerHTML).toContain(
+      `id: ${"0" + ".1".repeat(10)}`
+    );
   });
 
   test("should move child when 'down' button is clicked", async () => {
-    const rootDiv = document.getElementById("root");
-
     // create 3 children
-    const addChildButton = rootDiv.querySelector("button.add-child");
     for (let i = 0; i < 3; i++) {
-      addChildButton.click();
+      $addChildButton("0").click();
       await flushMicrotasks();
     }
 
-    const downButton = rootDiv.querySelector("div#item_0_3 button.down");
-    downButton.click();
+    $downButton("0.3").click();
     await flushMicrotasks();
 
-    // first child should be 0.2
-    // get child by index
-    expect(rootDiv.querySelector("div:nth-child(1)").innerHTML).toContain(
-      "id: 0.2"
-    );
+    expect($child("0", 0).innerHTML).toContain("id: 0.2");
+    expect($child("0", 1).innerHTML).toContain("id: 0.3");
   });
 
   test("should move child that has children when 'down' button is clicked", async () => {
-    const rootDiv = document.getElementById("root");
-
-    const addChildButton = rootDiv.querySelector("button.add-child");
     for (let i = 0; i < 3; i++) {
-      addChildButton.click();
+      $addChildButton("0").click();
       await flushMicrotasks();
     }
 
-    const addChildButton2 = rootDiv.querySelector(
-      "div#item_0_3 button.add-child"
-    );
-    const downButton = rootDiv.querySelector("div#item_0_3 button.down");
-
-    addChildButton2.click();
+    $addChildButton("0.3").click();
     await flushMicrotasks();
 
-    downButton.click();
+    $downButton("0.3").click();
     await flushMicrotasks();
 
-    expect(rootDiv.querySelector("div:nth-child(1)").innerHTML).toContain(
-      "id: 0.2"
-    );
-    expect(rootDiv.querySelector("div:nth-child(2)").innerHTML).toContain(
-      "id: 0.3.1"
-    );
+    expect($child("0", 0).innerHTML).toContain("id: 0.2");
+    expect($child("0", 1).innerHTML).toContain("id: 0.3.1");
+  });
+
+  test("should remove child when 'remove' button is clicked", async () => {
+    for (let i = 0; i < 3; i++) {
+      $addChildButton("0").click();
+      await flushMicrotasks();
+    }
+
+    $removeChildButton("0.3").click();
+    await flushMicrotasks();
+
+    expect($child("0", 0).innerHTML).toContain("id: 0.2");
+    expect($child("0", 1).innerHTML).toContain("id: 0.1");
+  });
+
+  test("should remove child and contain correct children", async () => {
+    for (let i = 0; i < 3; i++) {
+      $addChildButton("0").click();
+      await flushMicrotasks();
+    }
+    $removeChildButton("0.1").click();
+    await flushMicrotasks();
+
+    expect($child("0", 0).innerHTML).toContain("id: 0.3");
+    expect($child("0", 1).innerHTML).toContain("id: 0.2");
+
+    $addChildButton("0").click();
+    await flushMicrotasks();
+
+    expect($child("0", 0).innerHTML).toContain("id: 0.4");
+    expect($item("0").querySelectorAll(".item-list > .item").length).toBe(3);
   });
 });

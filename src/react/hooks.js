@@ -27,6 +27,8 @@ function flushUpdates() {
   Cache.deletions = [];
   Cache.nextUnitOfWork = Cache.rootFiber;
 
+  window.rootFiber = Cache.rootFiber;
+
   /* commitRoot 과정에서 nextUnitOfWork 가 생겼을 때 바로 workLoop 예약 */
   window.requestIdleCallback(workLoop); // 다음 idle 프레임 확보
 }

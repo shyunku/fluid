@@ -16,7 +16,43 @@ const LogFlags = {
 
 // 디버그용 로그 헬퍼 함수
 export function debug(flag, ...args) {
-  if (LogFlags.ALL && LogFlags[flag]) {
-    console.log(`\x1b[32m[${flag}]\x1b[0m`, ...args);
+  _log("log", flag, ...args);
+}
+
+export function warn(flag, ...args) {
+  _log("warn", flag, ...args);
+}
+
+export function error(flag, ...args) {
+  _log("error", flag, ...args);
+}
+
+export function fatal(flag, ...args) {
+  _log("fatal", flag, ...args);
+}
+
+function _log(level, flag, ...args) {
+  if (!LogFlags.hasOwnProperty(flag)) {
+    console.error(
+      `[MiniReact Error] 로그 플래그 "${flag}"가 정의되지 않았습니다.`
+    );
+    return;
+  }
+
+  switch (level) {
+    case "log":
+      if (LogFlags.ALL && LogFlags[flag]) {
+        console.log(`\x1b[32m[${flag}]\x1b[0m`, ...args);
+      }
+      break;
+    case "warn":
+      console.warn(`\x1b[33m[${flag}]\x1b[0m`, ...args);
+      break;
+    case "error":
+      console.error(`\x1b[31m[${flag}]\x1b[0m`, ...args);
+      break;
+    case "fatal":
+      console.log(`\x1b[35m[${flag}]\x1b[0m`, ...args);
+      break;
   }
 }

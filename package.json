@@ -2,7 +2,7 @@
   "name": "mini-react",
   "version": "1.0.1",
   "config": {
-    "core": "2.22.2",
+    "core": "2.22.3",
     "jsxVersion": "1.0.0"
   },
   "main": "index.js",

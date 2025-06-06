@@ -52,16 +52,13 @@ export function findHostSiblingDom(fiber) {
   return null; // 결국 찾지 못한 경우
 }
 
-/* 서브트리에서 모든 Host 노드를 찾아 삽입 */
 export function insertOrAppendDom(node, before, parentDom) {
   if (node.tag === NodeTagType.HOST || node.tag === NodeTagType.TEXT) {
     const target = node.stateNode;
-    if (target) {
-      if (before) {
-        parentDom.insertBefore(target, before);
-      } else {
-        parentDom.appendChild(target);
-      }
+    if (before) {
+      parentDom.insertBefore(target, before);
+    } else {
+      parentDom.appendChild(target);
     }
     return;
   }
@@ -70,19 +67,4 @@ export function insertOrAppendDom(node, before, parentDom) {
     insertOrAppendDom(child, before, parentDom);
     child = child.sibling;
   }
-}
-
-export function findChildHostFiber(fiber) {
-  if (fiber.stateNode && fiber.effectTag !== EffectType.PLACEMENT) {
-    return fiber.stateNode;
-  }
-
-  let child = fiber.child;
-  while (child) {
-    const dom = findChildHostFiber(child);
-    if (dom) return dom;
-    child = child.sibling;
-  }
-
-  return null;
 }

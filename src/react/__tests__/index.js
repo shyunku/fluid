@@ -27,6 +27,7 @@ const SubItem = ({
   index,
   indexEnd,
   onItemMove: onParentItemMove,
+  onItemRemove: onParentItemRemove,
   depth,
 }) => {
   const [items, setItems] = useState([]);
@@ -38,8 +39,9 @@ const SubItem = ({
   );
   const startTime = useMemo(() => Date.now(), []);
 
-  const onItemClick = () => {
-    setItems((items) => [{ id: items.length + 1, depth: depth + 1 }, ...items]);
+  const onItemAdd = () => {
+    const itemMaxId = Math.max(...items.map((item) => item.id), 0) || 0;
+    setItems((items) => [{ id: itemMaxId + 1, depth: depth + 1 }, ...items]);
   };
 
   const onItemMove = (index, offset) => {
@@ -52,7 +54,15 @@ const SubItem = ({
     });
   };
 
-  console.log(`${thisId} rendered`, items);
+  const onItemRemove = (index) => {
+    setItems((prevItems) => {
+      const newItems = [...prevItems];
+      newItems.splice(index, 1);
+      return newItems;
+    });
+  };
+
+  // console.log(`${thisId} rendered`, items.length, "children");
 
   useEffect(() => {
     // let t = setInterval(() => {
@@ -74,24 +84,26 @@ const SubItem = ({
       "div",
       { className: "header" },
       h("div", { className: "id" }, `id: ${thisId}`),
-      h(
-        "button",
-        { className: "add-child", onClick: onItemClick },
-        "add child"
-      ),
+      h("button", { className: "add-child", onClick: onItemAdd }, "child"),
       parentId != null &&
         index > 0 &&
         h(
           "button",
           { className: "up", onClick: (e) => onParentItemMove(index, -1) },
-          "up"
+          "▲"
         ),
       parentId != null &&
         index < indexEnd &&
         h(
           "button",
           { className: "down", onClick: (e) => onParentItemMove(index, 1) },
-          "down"
+          "▼"
+        ),
+      parentId != null &&
+        h(
+          "button",
+          { className: "remove", onClick: (e) => onParentItemRemove(index) },
+          "X"
         ),
       h("input", { onChange: (e) => setInput(e.target.value), value: input }),
       input,
@@ -110,6 +122,7 @@ const SubItem = ({
           index: iind,
           indexEnd: items.length - 1,
           onItemMove,
+          onItemRemove,
         })
       )
     )

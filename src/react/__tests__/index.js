@@ -1,8 +1,31 @@
 import { h } from "../h.js";
 import { render } from "../core.js";
-import { useState, useEffect, useRef, useMemo, useCallback } from "../hooks.js";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+  createContext,
+  useContext,
+} from "../hooks.js";
+
+// 1. Context 생성
+const ThemeContext = createContext("light");
+
+// 2. Context를 사용하는 자식 컴포넌트
+const ThemedButton = ({ children, ...props }) => {
+  const theme = useContext(ThemeContext);
+  const style =
+    theme === "dark"
+      ? "background-color: #333; color: #EEE;"
+      : "background-color: #EEE; color: #333;";
+
+  return h("button", { ...props, style }, children);
+};
 
 const TestBed = () => {
+  const [theme, setTheme] = useState("light");
   const [count, setCount] = useState(0);
   const [items, setItems] = useState(["Apple", "Banana", "Cherry"]);
   const [text, setText] = useState("");
@@ -37,70 +60,90 @@ const TestBed = () => {
     inputRef.current?.focus();
   };
 
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => (current === "light" ? "dark" : "light"));
+  }, []);
+
   return h(
-    "div",
-    { className: "test-container" },
-    h("h1", {}, "Mini-React Test Bed"),
-
+    // 3. Provider로 값 제공
+    ThemeContext.Provider,
+    { value: theme },
     h(
       "div",
-      { className: "card" },
-      h("h2", {}, "useState & useCallback"),
-      h("p", {}, `Count: ${count}`),
-      h(
-        "button",
-        { onClick: () => setCount((c) => c + 1), className: "increment" },
-        "Increment"
-      )
-    ),
+      { className: "test-container" },
+      h("h1", {}, "Mini-React Test Bed"),
 
-    h(
-      "div",
-      { className: "card" },
-      h("h2", {}, "useRef & DOM Interaction"),
       h(
-        "button",
-        { onClick: focusInput, className: "focus-input" },
-        "Click to Focus Input"
-      )
-    ),
-
-    h(
-      "div",
-      { className: "card" },
-      h("h2", {}, "List Management (Child CRUD & Keys)"),
-      h("input", {
-        ref: inputRef,
-        value: text,
-        onChange: (e) => setText(e.target.value),
-        placeholder: "New item...",
-      }),
-      h(
-        "button",
-        { onClick: handleAddItem, className: "add-item" },
-        "Add Item"
+        "div",
+        { className: "card" },
+        h("h2", {}, "useContext"),
+        h(
+          ThemedButton,
+          { onClick: toggleTheme, className: "toggle-theme" },
+          `Toggle Theme (Current: ${theme})`
+        )
       ),
+
       h(
-        "button",
-        { onClick: handleReverseItems, className: "reverse-list" },
-        "Reverse List"
+        "div",
+        { className: "card" },
+        h("h2", {}, "useState & useCallback"),
+        h("p", {}, `Count: ${count}`),
+        h(
+          ThemedButton,
+          { onClick: () => setCount((c) => c + 1), className: "increment" },
+          "Increment"
+        )
       ),
-      h("p", { style: "font-style: italic;" }, itemCountMessage),
+
       h(
-        "ul",
-        {},
-        ...items.map((item) =>
-          h(
-            "li",
-            { key: item }, // Use unique item name as key
-            item,
+        "div",
+        { className: "card" },
+        h("h2", {}, "useRef & DOM Interaction"),
+        h(
+          ThemedButton,
+          { onClick: focusInput, className: "focus-input" },
+          "Click to Focus Input"
+        )
+      ),
+
+      h(
+        "div",
+        { className: "card" },
+        h("h2", {}, "List Management (Child CRUD & Keys)"),
+        h("input", {
+          ref: inputRef,
+          value: text,
+          onChange: (e) => setText(e.target.value),
+          placeholder: "New item...",
+        }),
+        h(
+          ThemedButton,
+          { onClick: handleAddItem, className: "add-item" },
+          "Add Item"
+        ),
+        h(
+          ThemedButton,
+          { onClick: handleReverseItems, className: "reverse-list" },
+          "Reverse List"
+        ),
+        h("p", { style: "font-style: italic;" }, itemCountMessage),
+        h(
+          "ul",
+          {},
+          ...items.map((item) =>
             h(
-              "button",
-              {
-                onClick: () => handleRemoveItem(item),
-                style: "margin-left: 10px;",
-              },
-              "X"
+              "li",
+              { key: item }, // Use unique item name as key
+              item,
+              h(
+                ThemedButton,
+                {
+                  onClick: () => handleRemoveItem(item),
+                  className: "remove-item",
+                },
+                "X"
+              )
             )
           )
         )

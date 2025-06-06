@@ -61,8 +61,31 @@ describe("Mini-React Test Bed", () => {
     expect($$("li")[0].textContent).toContain("Apple");
   });
 
+  test("should toggle theme when 'Toggle Theme' button is clicked", async () => {
+    const themeButton = $(".toggle-theme");
+    const initialStyle = themeButton.style.backgroundColor;
+    expect(themeButton.textContent).toContain("light");
+
+    // 테마 토글
+    themeButton.click();
+    await flushMicrotasks();
+
+    const newStyle = themeButton.style.backgroundColor;
+    expect(themeButton.textContent).toContain("dark");
+    expect(newStyle).not.toBe(initialStyle);
+
+    // 다시 테마 토글
+    themeButton.click();
+    await flushMicrotasks();
+
+    const finalStyle = themeButton.style.backgroundColor;
+    expect(themeButton.textContent).toContain("light");
+    expect(finalStyle).toBe(initialStyle);
+  });
+
   test("should increment counter when 'Increment' button is clicked", async () => {
-    $("button.increment").click(); // 클래스 추가 필요
+    const incrementButton = $(".increment");
+    incrementButton.click();
     await flushMicrotasks();
     expect($("p").textContent).toBe("Count: 1");
   });
@@ -84,6 +107,9 @@ describe("Mini-React Test Bed", () => {
     expect($$("li").length).toBe(4);
     expect($$("li")[3].textContent).toContain("Durian");
     expect(input.value).toBe(""); // 입력창 초기화 확인
+
+    // 항목 추가 후 포커스
+    expect(MOCK_FOCUS).toHaveBeenCalledTimes(1);
   });
 
   test("should remove an item from the list", async () => {

@@ -111,6 +111,25 @@ function beginWork(fiber) {
   // console.log(fiber);
 
   switch (fiber.tag) {
+    case NodeTagType.PROVIDER: {
+      const context = fiber.type._context;
+      const value = fiber.props.value;
+
+      const prevValue = context._currentValue;
+      Cache.contextStack.push(prevValue);
+      context._currentValue = value;
+
+      debug(
+        "CONTEXT",
+        "Provider found. Value pushed:",
+        value,
+        "Previous:",
+        prevValue
+      );
+
+      reconcileChildren(fiber, fiber.props.children);
+      break;
+    }
     case NodeTagType.TEXT: {
       if (fiber.effectTag === EffectType.PLACEMENT) {
         const textNode = document.createTextNode(fiber.props.nodeValue);
@@ -224,6 +243,17 @@ function beginWork(fiber) {
  */
 function completeWork(fiber) {
   debug("COMPLETE_WORK", "completeWork for:", fiber);
+
+  if (fiber.tag === NodeTagType.PROVIDER) {
+    const context = fiber.type._context;
+    const prevValue = Cache.contextStack.pop();
+    context._currentValue = prevValue;
+    debug(
+      "CONTEXT",
+      "Provider complete. Value popped. Restored to:",
+      prevValue
+    );
+  }
 }
 
 /**

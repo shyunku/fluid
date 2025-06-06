@@ -34,4 +34,7 @@ export class Cache {
 
   // 대기 중인 Effect List
   static pendingEffects = [];
+
+  // Context 스택
+  static contextStack = [];
 }

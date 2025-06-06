@@ -131,3 +131,26 @@ export function useRef(initialValue) {
   Cache.hookIndex++;
   return hook;
 }
+
+const REACT_CONTEXT_TYPE = Symbol.for("react.context");
+const REACT_PROVIDER_TYPE = Symbol.for("react.provider");
+
+export function createContext(defaultValue) {
+  const context = {
+    $$typeof: REACT_CONTEXT_TYPE,
+    _currentValue: defaultValue,
+    Provider: null,
+  };
+  context.Provider = {
+    $$typeof: REACT_PROVIDER_TYPE,
+    _context: context,
+  };
+  return context;
+}
+
+export function useContext(context) {
+  debug("USE_CONTEXT", "useContext for:", context);
+  // 현재 컨텍스트 값을 읽어 반환합니다.
+  // 값의 업데이트는 Provider의 value prop 변경과 리렌더링에 의해 처리됩니다.
+  return context._currentValue;
+}

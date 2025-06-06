@@ -12,6 +12,8 @@ const LogFlags = {
   RECONCILE: false,
   USE_STATE: false,
   USE_REF: false,
+  USE_CONTEXT: false,
+  CONTEXT: false,
   SCHEDULE_UPDATE: false,
 };
 

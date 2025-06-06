@@ -3,6 +3,7 @@ export const NodeTagType = {
   HOST_ROOT: "host_root",
   TEXT: "text",
   COMPONENT: "component",
+  PROVIDER: "provider",
 };
 
 export const NodeType = {
@@ -44,6 +45,13 @@ export class Fiber {
     if (type === null) return NodeTagType.HOST_ROOT;
     if (type === NodeType.TEXT) return NodeTagType.TEXT;
     if (typeof type === "string") return NodeTagType.HOST;
+    if (
+      typeof type === "object" &&
+      type !== null &&
+      type.$$typeof === Symbol.for("react.provider")
+    ) {
+      return NodeTagType.PROVIDER;
+    }
     return NodeTagType.COMPONENT;
   }
 

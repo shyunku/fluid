@@ -118,6 +118,55 @@ function beginWork(fiber) {
       break;
     }
     case NodeTagType.COMPONENT: {
+      const alternate = fiber.alternate;
+      let hasPendingUpdates = false;
+      if (alternate) {
+        for (const hook of alternate.hooks) {
+          if (hook.queue && hook.queue.length > 0) {
+            hasPendingUpdates = true;
+            break;
+          }
+        }
+      }
+
+      if (
+        alternate &&
+        !changed(fiber.props, alternate.props) &&
+        !hasPendingUpdates
+      ) {
+        debug("BAILOUT", "Cloning children for:", fiber.componentName);
+
+        let currentChild = alternate.child;
+        if (!currentChild) {
+          break; // No children to clone
+        }
+
+        let firstNewFiber = null;
+        let prevNewFiber = null;
+
+        while (currentChild) {
+          const newFiber = new Fiber(
+            currentChild.type,
+            currentChild.props,
+            currentChild.key
+          );
+          newFiber.stateNode = currentChild.stateNode;
+          newFiber.alternate = currentChild;
+          newFiber.parent = fiber;
+
+          if (prevNewFiber === null) {
+            firstNewFiber = newFiber;
+          } else {
+            prevNewFiber.sibling = newFiber;
+          }
+          prevNewFiber = newFiber;
+          currentChild = currentChild.sibling;
+        }
+
+        fiber.child = firstNewFiber;
+        break;
+      }
+
       debug("BEGIN_WORK", "Component render for", fiber.componentName);
       prepareToRender(fiber);
       const element = fiber.type(fiber.props) || { props: { children: [] } };

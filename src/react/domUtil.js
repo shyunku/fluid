@@ -13,7 +13,7 @@ export function findHostParentFiber(fiber) {
 export function findHostParentDom(fiber) {
   const parentFiber = findHostParentFiber(fiber);
   if (!parentFiber) return null;
-  return parentFiber.stateNode?.target ?? null;
+  return parentFiber.stateNode ?? null;
 }
 
 /* Host 형제 탐색 */
@@ -46,7 +46,7 @@ export function findHostSiblingDom(fiber) {
 
     // `PLACEMENT` 태그가 없는 Host 컴포넌트 찾으면 반환
     if (!(node.effectTag && node.effectTag === EffectType.PLACEMENT))
-      return node.stateNode?.target ?? null;
+      return node.stateNode ?? null;
   }
 
   return null; // 결국 찾지 못한 경우
@@ -55,11 +55,13 @@ export function findHostSiblingDom(fiber) {
 /* 서브트리에서 모든 Host 노드를 찾아 삽입 */
 export function insertOrAppendDom(node, before, parentDom) {
   if (node.tag === NodeTagType.HOST || node.tag === NodeTagType.TEXT) {
-    const target = node.stateNode?.target;
-    if (before) {
-      parentDom.insertBefore(target, before);
-    } else {
-      parentDom.appendChild(target);
+    const target = node.stateNode;
+    if (target) {
+      if (before) {
+        parentDom.insertBefore(target, before);
+      } else {
+        parentDom.appendChild(target);
+      }
     }
     return;
   }
@@ -71,8 +73,8 @@ export function insertOrAppendDom(node, before, parentDom) {
 }
 
 export function findChildHostFiber(fiber) {
-  if (fiber.stateNode?.target && fiber.effectTag !== EffectType.PLACEMENT) {
-    return fiber.stateNode.target;
+  if (fiber.stateNode && fiber.effectTag !== EffectType.PLACEMENT) {
+    return fiber.stateNode;
   }
 
   let child = fiber.child;

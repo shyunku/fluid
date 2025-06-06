@@ -1,21 +1,19 @@
-import {
-  Fiber,
-  FiberNode,
-  NodeTagType,
-  NodeConnectionType,
-  EffectType,
-} from "./types.js";
-import { h } from "./h.js";
+import { Fiber, NodeTagType, EffectType, VNode } from "./types.js";
 import { prepareToRender, runEffects } from "./hooks.js";
 import { debug } from "./logger.js";
 import { changed, changedLog, removeFromArray } from "./util.js";
 import {
-  findChildHostFiber,
   findHostParentDom,
   findHostSiblingDom,
   insertOrAppendDom,
 } from "./domUtil.js";
 import { Cache } from "./cache.js";
+
+const requestIdleCallback =
+  window.requestIdleCallback ||
+  function (cb) {
+    return requestAnimationFrame(() => cb({ timeRemaining: () => 1 }));
+  };
 
 initialize();
 
@@ -26,35 +24,32 @@ initialize();
  * - 초기 렌더링 예약
  */
 function initialize() {
-  window.requestIdleCallback =
-    window.requestIdleCallback ||
-    function (cb) {
-      return requestAnimationFrame(() => cb({ timeRemaining: () => 1 }));
-    };
   Cache.renderFunc = render;
   requestIdleCallback(workLoop);
 }
 
 /**
  * render: 루트 요소를 받아 초기 Fiber 트리를 생성하고 작업을 시작합니다.
+ * @param {Function | VNode} element
+ * @param {HTMLElement} container
+ * @returns {void}
  */
-export function render(
-  component = Cache.rootComponent,
-  container = Cache.rootTarget
-) {
-  if (!Cache.rootComponent && !Cache.rootTarget) {
-    Cache.rootComponent = component;
-    Cache.rootTarget = container;
-  }
+export function render(element, container) {
+  Cache.rootComponent = element;
+  Cache.rootTarget = container;
 
-  // 최상위 Fiber 생성
+  Cache.renderFunc = () => render(Cache.rootComponent, Cache.rootTarget);
+
   Cache.rootFiber = new Fiber(null, {}, null);
-  Cache.rootFiber.stateNode = new FiberNode(container);
+  Cache.rootFiber.stateNode = Cache.rootTarget;
   Cache.rootFiber.alternate = Cache.currentRoot;
 
   prepareToRender(Cache.rootFiber);
 
-  const vnode = typeof component === "function" ? component() : component;
+  const vnode =
+    typeof Cache.rootComponent === "function"
+      ? Cache.rootComponent()
+      : Cache.rootComponent;
   Cache.rootFiber.props = { children: [vnode] };
 
   Cache.deletions = [];
@@ -67,6 +62,8 @@ export function render(
 
 /**
  * performUnitOfWork: 하나의 Fiber에 대해 beginWork → 자식 재귀 → completeWork를 수행합니다.
+ * @param {Fiber} fiber
+ * @returns {Fiber}
  */
 function performUnitOfWork(fiber) {
   debug("PERFORM_UNIT", "performUnitOfWork on:", fiber);
@@ -86,12 +83,11 @@ function performUnitOfWork(fiber) {
 
 /**
  * commitRoot: 모든 변경(삭제, 배치, 업데이트)을 DOM에 반영합니다.
+ * @returns {void}
  */
 function commitRoot() {
   debug("COMMIT_ROOT", "Commit Root 시작");
-  // 1) 삭제 처리
   Cache.deletions.forEach(commitWork);
-  // 2) 배치·업데이트 처리
   commitWork(Cache.rootFiber.child);
 
   Cache.currentRoot = Cache.rootFiber;
@@ -107,6 +103,8 @@ function commitRoot() {
  * - COMPONENT: 함수형 컴포넌트 실행 후 reconcile
  * - HOST: DOM 생성 또는 업데이트 후 reconcile
  * - HOST_ROOT: 자식 reconcile
+ * @param {Fiber} fiber
+ * @returns {void}
  */
 function beginWork(fiber) {
   debug("BEGIN_WORK", "beginWork:", fiber);
@@ -114,9 +112,8 @@ function beginWork(fiber) {
   switch (fiber.tag) {
     case NodeTagType.TEXT: {
       if (fiber.effectTag === EffectType.PLACEMENT) {
-        // 텍스트 노드 생성
         const textNode = document.createTextNode(fiber.props.nodeValue);
-        fiber.stateNode = new FiberNode(textNode);
+        fiber.stateNode = textNode;
       }
       break;
     }
@@ -128,13 +125,16 @@ function beginWork(fiber) {
       break;
     }
     case NodeTagType.HOST: {
-      // 마운트 vs 업데이트
-      if (fiber.effectTag === EffectType.PLACEMENT) {
+      if (!fiber.stateNode) {
         debug("BEGIN_WORK", "Create host DOM:", fiber.type);
         const dom = document.createElement(fiber.type);
-
         applyProps(dom, fiber.props);
-        fiber.stateNode = new FiberNode(dom);
+        fiber.stateNode = dom;
+      } else if (fiber.effectTag === EffectType.PLACEMENT) {
+        // 이미 stateNode(DOM)는 있지만 PLACEMENT 태그가 붙은 경우 (예: 이동)
+        // 이 경우에는 DOM을 새로 만들 필요는 없지만, applyProps는 필요할 수 있음 (이동 후 속성 변경 가정시)
+        // 하지만 React 원칙상 이동은 props 변경없이 위치만 바뀌므로, applyProps는 업데이트에서 처리.
+        // 여기서는 특별한 작업이 필요 없을 수 있음.
       }
       reconcileChildren(fiber, fiber.props.children);
       break;
@@ -148,33 +148,17 @@ function beginWork(fiber) {
 
 /**
  * completeWork: Fiber 간 연결(Child/Sibling)을 실제 FiberNode에 반영합니다.
+ * @param {Fiber} fiber
+ * @returns {void}
  */
 function completeWork(fiber) {
   debug("COMPLETE_WORK", "completeWork for:", fiber);
-  if (!(fiber?.stateNode instanceof FiberNode)) return;
-
-  let parentFiber = fiber.parent;
-  while (parentFiber && !(parentFiber.stateNode instanceof FiberNode)) {
-    parentFiber = parentFiber.parent;
-  }
-  if (!parentFiber) return;
-
-  const parentNode = parentFiber.stateNode;
-  // 자식 연결
-  debug("COMPLETE_WORK", "connect CHILD:", parentNode, fiber.stateNode);
-  parentNode.connect(NodeConnectionType.CHILD, fiber.stateNode);
-
-  // 형제 연결
-  let sib = parentNode.child;
-  while (sib && sib.sibling) sib = sib.sibling;
-  if (sib && sib !== fiber.stateNode) {
-    debug("COMPLETE_WORK", "connect SIBLING:", parentNode, fiber.stateNode);
-    parentNode.connect(NodeConnectionType.SIBLING, fiber.stateNode);
-  }
 }
 
 /**
  * commitWork: effectTag에 따라 DOM에 배치·업데이트·삭제를 수행합니다.
+ * @param {Fiber} fiber
+ * @returns {void}
  */
 function commitWork(fiber) {
   if (!fiber) return;
@@ -192,17 +176,34 @@ function commitWork(fiber) {
   commitWork(fiber.sibling);
 }
 
+/**
+ * commitPlacement: DOM에 배치를 수행합니다.
+ * @param {Fiber} fiber
+ * @returns {void}
+ */
 function commitPlacement(fiber) {
   const parentDom = findHostParentDom(fiber);
-  const beforeDom = findHostSiblingDom(fiber); // null 이면 append
+  if (!parentDom) {
+    console.error("Cannot find parent DOM for placement:", fiber);
+    return;
+  }
+  const beforeDom = findHostSiblingDom(fiber);
 
   debug("COMMIT_WORK", "Placement:", fiber, parentDom, beforeDom);
   insertOrAppendDom(fiber, beforeDom, parentDom);
 }
 
+/**
+ * commitUpdate: DOM에 업데이트를 수행합니다.
+ * @param {Fiber} fiber
+ * @returns {void}
+ */
 function commitUpdate(fiber) {
-  const target = fiber.stateNode?.target;
+  const target = fiber.stateNode;
   if (!target) return;
+  if (fiber.tag !== NodeTagType.HOST && fiber.tag !== NodeTagType.TEXT) return;
+  if (!(target instanceof Element) && !(target instanceof Text)) return;
+
   debug(
     "COMMIT_WORK",
     "Update:",
@@ -212,19 +213,58 @@ function commitUpdate(fiber) {
     fiber.props
   );
   if (changed(fiber.alternate.props, fiber.props)) {
-    // changedLog(fiber.alternate.props, fiber.props);
     updateDom(target, fiber.alternate.props, fiber.props);
   }
 }
 
-function commitDelete(fiber) {
+/**
+ * commitDelete: DOM에 삭제를 수행합니다.
+ * @param {Fiber} fiber
+ * @param {HTMLElement} explicitParentDom
+ * @returns {void}
+ */
+function commitDelete(fiber, explicitParentDom = null) {
   debug("COMMIT_WORK", "Delete:", fiber);
-  const parentDom = findHostParentDom(fiber);
-  commitDeletion(fiber, parentDom);
+  if (fiber.tag === NodeTagType.HOST || fiber.tag === NodeTagType.TEXT) {
+    if (fiber.stateNode) {
+      const parentDom = explicitParentDom || findHostParentDom(fiber);
+      if (parentDom && fiber.stateNode.parentNode === parentDom) {
+        parentDom.removeChild(fiber.stateNode);
+      } else if (parentDom && !fiber.stateNode.parentNode) {
+        debug(
+          "COMMIT_WORK",
+          "Node already removed or parent mismatch:",
+          fiber,
+          parentDom
+        );
+      } else if (!parentDom) {
+        console.warn(
+          "Parent DOM not found for deletion of:",
+          fiber,
+          "Current parentNode:",
+          fiber.stateNode.parentNode
+        );
+      }
+    }
+  } else {
+    if (fiber.child) {
+      commitDelete(fiber.child, explicitParentDom || findHostParentDom(fiber));
+    }
+  }
+  if (fiber.tag !== NodeTagType.HOST && fiber.tag !== NodeTagType.TEXT) {
+    let child = fiber.child;
+    while (child) {
+      commitDelete(child, findHostParentDom(child));
+      child = child.sibling;
+    }
+  }
 }
 
 /**
  * applyProps: DOM에 이벤트 리스너 및 속성을 설정합니다.
+ * @param {HTMLElement} dom
+ * @param {Object} props
+ * @returns {void}
  */
 function applyProps(dom, props) {
   debug("APPLY_PROPS", "applyProps for:", dom, props);
@@ -252,6 +292,10 @@ function applyProps(dom, props) {
 
 /**
  * applyProp: DOM에 기타 속성을 상세하게 설정합니다.
+ * @param {HTMLElement} dom
+ * @param {string} name
+ * @param {any} value
+ * @returns {void}
  */
 function applyProp(dom, name, value) {
   if (name === "style" && typeof value === "object") {
@@ -267,9 +311,12 @@ function applyProp(dom, name, value) {
 
 /**
  * updateDom: 이전/새 props를 비교해 이벤트 및 속성 변경사항을 반영합니다.
+ * @param {HTMLElement} dom
+ * @param {Object} prevProps
+ * @param {Object} nextProps
+ * @returns {void}
  */
 function updateDom(dom, prevProps, nextProps) {
-  // 1) 이벤트 리스너 제거
   Object.keys(prevProps)
     .filter((name) => name.startsWith("on"))
     .forEach((name) => {
@@ -278,14 +325,12 @@ function updateDom(dom, prevProps, nextProps) {
       }
     });
 
-  // 2) 속성 제거
   Object.keys(prevProps)
     .filter((name) => name !== "children" && !name.startsWith("on"))
     .forEach((name) => {
       if (!(name in nextProps)) dom[name] = "";
     });
 
-  // 3) 이벤트 등록 및 속성 업데이트
   Object.keys(nextProps)
     .filter((name) => name !== "children")
     .forEach((name) => {
@@ -303,20 +348,11 @@ function updateDom(dom, prevProps, nextProps) {
 }
 
 /**
- * commitDeletion: 해당 Fiber 및 자식들을 순회하며 DOM에서 제거합니다.
- */
-function commitDeletion(fiber, parentDom) {
-  if (!fiber) return;
-  if (fiber.stateNode?.target) {
-    parentDom.removeChild(fiber.stateNode.target);
-  } else {
-    commitDeletion(fiber.child, parentDom);
-  }
-}
-
-/**
  * reconcileChildren: key를 활용해 이전 Fiber와 매칭하고,
  * 타입/키가 같으면 업데이트, 새로 추가되거나 삭제가 필요한 노드를 처리합니다.
+ * @param {Fiber} wipFiber
+ * @param {VNode[]} elements
+ * @returns {void}
  */
 function reconcileChildren(wipFiber, elements) {
   debug("RECONCILE", "Reconciling children for:", wipFiber, elements);
@@ -340,11 +376,10 @@ function reconcileChildren(wipFiber, elements) {
   for (const element of elements) {
     element.key = element.props.key ?? null;
     const key = element.key ?? newIndex;
-    const sameFiber = existing[key]; // 같은 키를 가진 노드
+    const sameFiber = existing[key];
     let newFiber = null;
 
     if (sameFiber && element.type === sameFiber.type) {
-      // 업데이트
       newFiber = new Fiber(sameFiber.type, element.props, key);
       newFiber.stateNode = sameFiber.stateNode;
       newFiber.alternate = sameFiber;
@@ -352,30 +387,25 @@ function reconcileChildren(wipFiber, elements) {
       newFiber.index = newIndex;
 
       if (sameFiber.index < lastPlacedIndex) {
-        // 앞쪽에 이미 고정된 노드가 있으므로, 이 노드는 앞으로 '이동'해야 함
         newFiber.effectTag = EffectType.PLACEMENT;
       } else {
-        lastPlacedIndex = sameFiber.index; // 오른쪽 끝 갱신
+        lastPlacedIndex = sameFiber.index;
       }
       delete existing[key];
     } else if (element) {
-      // 배치
       newFiber = new Fiber(element.type, element.props, key);
       newFiber.effectTag = EffectType.PLACEMENT;
     }
 
     if (sameFiber && !newFiber) {
-      // 삭제
       sameFiber.effectTag = EffectType.DELETE;
       Cache.deletions.push(sameFiber);
     }
 
     if (newIndex === 0) {
-      // child connection
       wipFiber.child = newFiber;
       if (newFiber) newFiber.parent = wipFiber;
     } else if (prevSibling && newFiber) {
-      // sibling connection
       prevSibling.sibling = newFiber;
       newFiber.parent = wipFiber;
     }
@@ -383,7 +413,6 @@ function reconcileChildren(wipFiber, elements) {
     newIndex++;
   }
 
-  // 남은 oldFiber들은 삭제
   for (const key in existing) {
     const fiberToDelete = existing[key];
     fiberToDelete.effectTag = EffectType.DELETE;
@@ -391,14 +420,21 @@ function reconcileChildren(wipFiber, elements) {
   }
 }
 
-// 1) shouldYield 로 정확히 프레임을 쪼갬
+/**
+ * shouldYield: 프레임 쪼개기
+ * @param {number} start
+ * @param {any} deadline
+ * @returns {boolean}
+ */
 function shouldYield(start, deadline) {
-  // idleDeadline.timeRemaining()이 지원되는 브라우저 우선
   if (deadline) return deadline.timeRemaining() < 1;
-  // fallback: 4ms 이상 점유 시 양보
   return performance.now() - start > 4;
 }
 
+/**
+ * ensureWorkLoop: 작업 루프 보장
+ * @returns {void}
+ */
 function ensureWorkLoop() {
   if (!Cache.workLoopScheduled) {
     Cache.workLoopScheduled = true;
@@ -408,6 +444,8 @@ function ensureWorkLoop() {
 
 /**
  * workLoop: 유휴 시간에 performUnitOfWork를 반복 호출합니다.
+ * @param {any} deadline
+ * @returns {void}
  */
 export function workLoop(deadline) {
   Cache.workLoopScheduled = false;
@@ -418,11 +456,11 @@ export function workLoop(deadline) {
   }
 
   if (Cache.nextUnitOfWork) {
-    ensureWorkLoop(); // 잔여 작업이 있으면 다음 idle 시점에 계속 수행
+    ensureWorkLoop();
   } else if (Cache.rootFiber) {
     commitRoot();
     if (Cache.nextUnitOfWork) {
-      ensureWorkLoop(); // commitRoot 후에도 다음 작업이 있으면 계속
+      ensureWorkLoop();
     }
   }
 }

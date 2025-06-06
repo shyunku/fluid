@@ -126,4 +126,32 @@ describe("Mini-React Application Test", () => {
       "id: 0.2"
     );
   });
+
+  test("should move child that has children when 'down' button is clicked", async () => {
+    const rootDiv = document.getElementById("root");
+
+    const addChildButton = rootDiv.querySelector("button.add-child");
+    for (let i = 0; i < 3; i++) {
+      addChildButton.click();
+      await flushMicrotasks();
+    }
+
+    const addChildButton2 = rootDiv.querySelector(
+      "div#item_0_3 button.add-child"
+    );
+    const downButton = rootDiv.querySelector("div#item_0_3 button.down");
+
+    addChildButton2.click();
+    await flushMicrotasks();
+
+    downButton.click();
+    await flushMicrotasks();
+
+    expect(rootDiv.querySelector("div:nth-child(1)").innerHTML).toContain(
+      "id: 0.2"
+    );
+    expect(rootDiv.querySelector("div:nth-child(2)").innerHTML).toContain(
+      "id: 0.3.1"
+    );
+  });
 });

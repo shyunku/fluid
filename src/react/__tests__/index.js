@@ -5,14 +5,19 @@ import { useEffect, useMemo, useState } from "../hooks.js";
 const App = () => {
   const [rootIndex, setRootIndex] = useState(0);
 
-  return h(SubItem, {
-    id: `0`,
-    index: rootIndex,
-    indexEnd: 0,
-    parentId: null,
-    depth: 0,
-    key: 0,
-  });
+  return h(
+    "div",
+    { className: "app" },
+    h("h1", {}, "MiniReact Dev Test"),
+    h(SubItem, {
+      id: `0`,
+      index: rootIndex,
+      indexEnd: 0,
+      parentId: null,
+      depth: 0,
+      key: 0,
+    })
+  );
 };
 
 // SubItem 컴포넌트 정의
@@ -62,7 +67,7 @@ const SubItem = ({
     "div",
     {
       className: "item",
-      style: `margin-left: ${20}px`,
+      style: `margin-left: ${depth > 0 ? 20 : 0}px`,
       id: `item_${thisId?.replace(/\./g, "_") ?? "unknown"}`,
     },
     h(

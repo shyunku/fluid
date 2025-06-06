@@ -118,59 +118,80 @@ function beginWork(fiber) {
       break;
     }
     case NodeTagType.COMPONENT: {
-      const alternate = fiber.alternate;
-      let hasPendingUpdates = false;
-      if (alternate) {
-        for (const hook of alternate.hooks) {
-          if (hook.queue && hook.queue.length > 0) {
-            hasPendingUpdates = true;
+      try {
+        const alternate = fiber.alternate;
+        let hasPendingUpdates = false;
+        if (alternate) {
+          for (const hook of alternate.hooks) {
+            if (hook.queue && hook.queue.length > 0) {
+              hasPendingUpdates = true;
+              break;
+            }
+          }
+        }
+
+        if (
+          alternate &&
+          !changed(fiber.props, alternate.props) &&
+          !hasPendingUpdates
+        ) {
+          debug("BAILOUT", "Cloning children for:", fiber.componentName);
+
+          let currentChild = alternate.child;
+          if (!currentChild) {
+            break; // No children to clone
+          }
+
+          let firstNewFiber = null;
+          let prevNewFiber = null;
+
+          while (currentChild) {
+            const newFiber = new Fiber(
+              currentChild.type,
+              currentChild.props,
+              currentChild.key
+            );
+            newFiber.stateNode = currentChild.stateNode;
+            newFiber.alternate = currentChild;
+            newFiber.parent = fiber;
+
+            if (prevNewFiber === null) {
+              firstNewFiber = newFiber;
+            } else {
+              prevNewFiber.sibling = newFiber;
+            }
+            prevNewFiber = newFiber;
+            currentChild = currentChild.sibling;
+          }
+
+          fiber.child = firstNewFiber;
+          break;
+        }
+
+        debug("BEGIN_WORK", "Component render for", fiber.componentName);
+        prepareToRender(fiber);
+        const element = fiber.type(fiber.props) || { props: { children: [] } };
+        reconcileChildren(fiber, [element]);
+      } catch (error) {
+        debug("ERROR_BOUNDARY", "Caught error in", fiber.componentName, error);
+        let boundary = fiber.parent;
+        while (boundary) {
+          if (
+            boundary.props &&
+            typeof boundary.props.renderFallback === "function"
+          ) {
+            debug("ERROR_BOUNDARY", "Found boundary:", boundary.componentName);
+            boundary.hasError = true;
+            boundary.error = error;
             break;
           }
+          boundary = boundary.parent;
+        }
+        if (!boundary) {
+          console.error("Uncaught error:", error);
+          throw error;
         }
       }
-
-      if (
-        alternate &&
-        !changed(fiber.props, alternate.props) &&
-        !hasPendingUpdates
-      ) {
-        debug("BAILOUT", "Cloning children for:", fiber.componentName);
-
-        let currentChild = alternate.child;
-        if (!currentChild) {
-          break; // No children to clone
-        }
-
-        let firstNewFiber = null;
-        let prevNewFiber = null;
-
-        while (currentChild) {
-          const newFiber = new Fiber(
-            currentChild.type,
-            currentChild.props,
-            currentChild.key
-          );
-          newFiber.stateNode = currentChild.stateNode;
-          newFiber.alternate = currentChild;
-          newFiber.parent = fiber;
-
-          if (prevNewFiber === null) {
-            firstNewFiber = newFiber;
-          } else {
-            prevNewFiber.sibling = newFiber;
-          }
-          prevNewFiber = newFiber;
-          currentChild = currentChild.sibling;
-        }
-
-        fiber.child = firstNewFiber;
-        break;
-      }
-
-      debug("BEGIN_WORK", "Component render for", fiber.componentName);
-      prepareToRender(fiber);
-      const element = fiber.type(fiber.props) || { props: { children: [] } };
-      reconcileChildren(fiber, [element]);
       break;
     }
     case NodeTagType.HOST: {
@@ -410,8 +431,21 @@ function reconcileChildren(wipFiber, elements) {
   let oldFiber = wipFiber.alternate?.child;
   let index = 0;
 
+  const explicitKeys = new Set();
+  elements.forEach((element) => {
+    if (element?.props?.key !== null && element?.props?.key !== undefined) {
+      explicitKeys.add(element.props.key);
+    }
+  });
+
   while (oldFiber) {
-    const key = oldFiber.key ?? index;
+    let key = oldFiber.key;
+    if (key === null || key === undefined) {
+      key = index;
+      if (explicitKeys.has(key)) {
+        key = `.${index}`;
+      }
+    }
     oldFiber.index = index;
     existing[key] = oldFiber;
     oldFiber = oldFiber.sibling;
@@ -423,8 +457,13 @@ function reconcileChildren(wipFiber, elements) {
   let lastPlacedIndex = 0;
 
   for (const element of elements) {
-    element.key = element.props.key ?? null;
-    const key = element.key ?? newIndex;
+    let key = element.props.key;
+    if (key === null || key === undefined) {
+      key = newIndex;
+      if (explicitKeys.has(key)) {
+        key = `.${newIndex}`;
+      }
+    }
     const sameFiber = existing[key];
     let newFiber = null;
 
@@ -444,6 +483,7 @@ function reconcileChildren(wipFiber, elements) {
     } else if (element) {
       newFiber = new Fiber(element.type, element.props, key);
       newFiber.effectTag = EffectType.PLACEMENT;
+      newFiber.index = newIndex;
     }
 
     if (sameFiber && !newFiber) {

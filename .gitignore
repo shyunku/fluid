@@ -1,3 +1,4 @@
 node_modules/
 .vscode
 real-react/node_modules/
+test-results/

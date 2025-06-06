@@ -1,6 +1,6 @@
 {
   "name": "mini-react",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "config": {
     "core": "3.0.0-beta.2",
     "jsxVersion": "1.0.0"
@@ -8,6 +8,10 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
+    "test:e2e": "playwright test",
+    "test:e2e:react": "playwright test tests-e2e/react",
+    "test:e2e:jsx": "echo \"JSX E2E tests not implemented yet\" && exit 0",
+    "test:e2e:report": "playwright show-report",
     "start": "node index.js",
     "build": "esbuild src/react/index.js --format=iife --global-name=MiniReact --bundle --outfile=dist/MiniReact-%npm_package_config_core%.js --banner:js=\"/* MiniReact v%npm_package_config_core% */\n\"",
     "build/jsx": "esbuild src/jsx/index.js --format=iife --global-name=MiniJSX --bundle --outfile=dist/MiniJSX-%npm_package_config_jsxVersion%.js --banner:js=\"/* MiniJSX v%npm_package_config_jsxVersion% */\n\""
@@ -28,6 +32,7 @@
     "@babel/core": "^7.27.4",
     "@babel/plugin-transform-modules-commonjs": "^7.27.1",
     "@babel/preset-env": "^7.27.2",
+    "@playwright/test": "^1.52.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^30.0.0-beta.3"
   },

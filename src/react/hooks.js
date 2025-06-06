@@ -119,3 +119,15 @@ export function useCallback(callback, deps) {
   // useMemo를 활용해 메모이제이션
   return useMemo(() => callback, deps);
 }
+
+export function useRef(initialValue) {
+  debug("USE_REF", "useRef initial:", initialValue);
+  const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
+  // 첫 렌더링 시에는 ref 객체를 생성하고, 이후에는 기존 객체를 재사용합니다.
+  const hook = oldHook || { current: initialValue };
+
+  Cache.wipFiber.hooks[Cache.hookIndex] = hook;
+  debug("USE_REF", "hook stored at index", Cache.hookIndex, hook);
+  Cache.hookIndex++;
+  return hook;
+}

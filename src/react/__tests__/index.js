@@ -1,132 +1,112 @@
 import { h } from "../h.js";
 import { render } from "../core.js";
-import { useEffect, useMemo, useState } from "../hooks.js";
+import { useState, useEffect, useRef, useMemo, useCallback } from "../hooks.js";
 
-const App = () => {
-  const [rootIndex, setRootIndex] = useState(0);
-
-  return h(
-    "div",
-    { className: "app" },
-    h("h1", {}, "MiniReact Dev Test"),
-    h(SubItem, {
-      id: `0`,
-      index: rootIndex,
-      indexEnd: 0,
-      parentId: null,
-      depth: 0,
-      key: 0,
-    })
-  );
-};
-
-// SubItem 컴포넌트 정의
-const SubItem = ({
-  id,
-  parentId,
-  index,
-  indexEnd,
-  onItemMove: onParentItemMove,
-  onItemRemove: onParentItemRemove,
-  depth,
-}) => {
-  const [items, setItems] = useState([]);
-  const [input, setInput] = useState("");
-  const [duration, setDuration] = useState(0);
-  const thisId = useMemo(
-    () => `${parentId ? `${parentId}.` : ""}${id}`,
-    [parentId, id]
-  );
-  const startTime = useMemo(() => Date.now(), []);
-
-  const onItemAdd = () => {
-    const itemMaxId = Math.max(...items.map((item) => item.id), 0) || 0;
-    setItems((items) => [{ id: itemMaxId + 1, depth: depth + 1 }, ...items]);
-  };
-
-  const onItemMove = (index, offset) => {
-    setItems((prevItems) => {
-      const newItems = [...prevItems];
-      const [movedItem] = newItems.splice(index, 1);
-      const finalPos = Math.max(0, Math.min(newItems.length, index + offset));
-      newItems.splice(finalPos, 0, movedItem);
-      return newItems;
-    });
-  };
-
-  const onItemRemove = (index) => {
-    setItems((prevItems) => {
-      const newItems = [...prevItems];
-      newItems.splice(index, 1);
-      return newItems;
-    });
-  };
-
-  // console.log(`${thisId} rendered`, items.length, "children");
+const TestBed = () => {
+  const [count, setCount] = useState(0);
+  const [items, setItems] = useState(["Apple", "Banana", "Cherry"]);
+  const [text, setText] = useState("");
+  const inputRef = useRef(null);
 
   useEffect(() => {
-    // let t = setInterval(() => {
-    //   setDuration(Date.now() - startTime);
-    // }, 0);
-    // return () => {
-    //   clearInterval(t);
-    // };
+    document.title = `You have ${items.length} items`;
+    console.log(`[useEffect] Items updated:`, items);
+  }, [items]);
+
+  const handleAddItem = useCallback(() => {
+    if (text.trim()) {
+      setItems((prevItems) => [...prevItems, text.trim()]);
+      setText("");
+      inputRef.current?.focus();
+    }
+  }, [text]);
+
+  const handleRemoveItem = useCallback((keyToRemove) => {
+    setItems((prevItems) => prevItems.filter((item) => item !== keyToRemove));
   }, []);
+
+  const handleReverseItems = useCallback(() => {
+    setItems((prevItems) => [...prevItems].reverse());
+  }, []);
+
+  const itemCountMessage = useMemo(() => {
+    return `There are ${items.length} items in the list.`;
+  }, [items.length]);
+
+  const focusInput = () => {
+    inputRef.current?.focus();
+  };
 
   return h(
     "div",
-    {
-      className: "item",
-      style: `margin-left: ${depth > 0 ? 20 : 0}px`,
-      id: `item_${thisId?.replace(/\./g, "_") ?? "unknown"}`,
-    },
+    { className: "test-container" },
+    h("h1", {}, "Mini-React Test Bed"),
+
     h(
       "div",
-      { className: "header" },
-      h("div", { className: "id" }, `id: ${thisId}`),
-      h("button", { className: "add-child", onClick: onItemAdd }, "child"),
-      parentId != null &&
-        index > 0 &&
-        h(
-          "button",
-          { className: "up", onClick: (e) => onParentItemMove(index, -1) },
-          "▲"
-        ),
-      parentId != null &&
-        index < indexEnd &&
-        h(
-          "button",
-          { className: "down", onClick: (e) => onParentItemMove(index, 1) },
-          "▼"
-        ),
-      parentId != null &&
-        h(
-          "button",
-          { className: "remove", onClick: (e) => onParentItemRemove(index) },
-          "X"
-        ),
-      h("input", { onChange: (e) => setInput(e.target.value), value: input }),
-      input,
-      "/",
-      duration + "ms"
+      { className: "card" },
+      h("h2", {}, "useState & useCallback"),
+      h("p", {}, `Count: ${count}`),
+      h(
+        "button",
+        { onClick: () => setCount((c) => c + 1), className: "increment" },
+        "Increment"
+      )
     ),
+
     h(
       "div",
-      { className: "item-list" },
-      // 수정: 내부 map 호출 제거 및 각 항목에 대해 단일 SubItem 렌더링, 고유 key 부여
-      items.map((item, iind) =>
-        h(SubItem, {
-          ...item,
-          key: `${thisId}.` + item.id,
-          parentId: thisId,
-          index: iind,
-          indexEnd: items.length - 1,
-          onItemMove,
-          onItemRemove,
-        })
+      { className: "card" },
+      h("h2", {}, "useRef & DOM Interaction"),
+      h(
+        "button",
+        { onClick: focusInput, className: "focus-input" },
+        "Click to Focus Input"
+      )
+    ),
+
+    h(
+      "div",
+      { className: "card" },
+      h("h2", {}, "List Management (Child CRUD & Keys)"),
+      h("input", {
+        ref: inputRef,
+        value: text,
+        onChange: (e) => setText(e.target.value),
+        placeholder: "New item...",
+      }),
+      h(
+        "button",
+        { onClick: handleAddItem, className: "add-item" },
+        "Add Item"
+      ),
+      h(
+        "button",
+        { onClick: handleReverseItems, className: "reverse-list" },
+        "Reverse List"
+      ),
+      h("p", { style: "font-style: italic;" }, itemCountMessage),
+      h(
+        "ul",
+        {},
+        ...items.map((item) =>
+          h(
+            "li",
+            { key: item }, // Use unique item name as key
+            item,
+            h(
+              "button",
+              {
+                onClick: () => handleRemoveItem(item),
+                style: "margin-left: 10px;",
+              },
+              "X"
+            )
+          )
+        )
       )
     )
   );
 };
 
-render(App, document.getElementById("root"));
+render(h(TestBed, {}), document.getElementById("root"));

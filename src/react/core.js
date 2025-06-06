@@ -346,8 +346,15 @@ function commitDelete(fiber, explicitParentDom = null) {
  */
 function applyProps(dom, props) {
   debug("APPLY_PROPS", "applyProps for:", dom, props);
+
+  if (props.ref && typeof props.ref === "object") {
+    props.ref.current = dom;
+  }
+
   Object.keys(props)
-    .filter((k) => k !== "children" && k !== "key" && k !== "nodeValue")
+    .filter(
+      (k) => k !== "children" && k !== "key" && k !== "nodeValue" && k !== "ref"
+    )
     .forEach((name) => {
       if (name.startsWith("on") && typeof props[name] === "function") {
         const eventType = name.slice(2).toLowerCase();
@@ -403,14 +410,24 @@ function updateDom(dom, prevProps, nextProps) {
       }
     });
 
+  // ref 갱신 처리
+  if (prevProps.ref && prevProps.ref !== nextProps.ref) {
+    prevProps.ref.current = null;
+  }
+  if (nextProps.ref && typeof nextProps.ref === "object") {
+    nextProps.ref.current = dom;
+  }
+
   Object.keys(prevProps)
-    .filter((name) => name !== "children" && !name.startsWith("on"))
+    .filter(
+      (name) => name !== "children" && !name.startsWith("on") && name !== "ref"
+    )
     .forEach((name) => {
       if (!(name in nextProps)) dom[name] = "";
     });
 
   Object.keys(nextProps)
-    .filter((name) => name !== "children")
+    .filter((name) => name !== "children" && name !== "ref")
     .forEach((name) => {
       if (prevProps[name] === nextProps[name]) return;
 

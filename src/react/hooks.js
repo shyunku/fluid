@@ -3,12 +3,19 @@ import { workLoop } from "./core.js";
 import { Cache } from "./cache.js";
 import { Fiber } from "./types.js";
 
+/**
+ * 렌더링을 위해 파이버를 준비합니다.
+ * @param {Fiber} fiber
+ */
 export function prepareToRender(fiber) {
   Cache.wipFiber = fiber;
   Cache.wipFiber.hooks = [];
   Cache.hookIndex = 0;
 }
 
+/**
+ * 업데이트를 스케줄링하고 마이크로태스크로 실행합니다.
+ */
 function flushUpdates() {
   // 마이크로태스크에서 한 번만 실행
   Cache.scheduled = false;
@@ -33,6 +40,9 @@ function flushUpdates() {
   window.requestIdleCallback(workLoop); // 다음 idle 프레임 확보
 }
 
+/**
+ * 업데이트를 스케줄링합니다.
+ */
 export function scheduleUpdate() {
   if (Cache.scheduled) return; // 중복 예약 방지
   Cache.scheduled = true;
@@ -49,12 +59,23 @@ export function runEffects() {
   Cache.pendingEffects.length = 0;
 }
 
+/**
+ * 상태를 관리하기 위한 훅입니다.
+ * @param {*} initialState
+ * @returns {Array} - state와 dispatch 함수를 포함하는 배열
+ */
 export function useState(initialState) {
   return useReducer((state, action) => {
     return typeof action === "function" ? action(state) : action;
   }, initialState);
 }
 
+/**
+ * 리듀서 함수를 사용하여 상태를 관리하는 훅입니다.
+ * @param {function(any, any): any} reducer
+ * @param {*} initialState
+ * @returns {Array} - state와 dispatch 함수를 포함하는 배열
+ */
 export function useReducer(reducer, initialState) {
   const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
   const hook = oldHook || { state: initialState, queue: [] };
@@ -74,6 +95,11 @@ export function useReducer(reducer, initialState) {
   return [hook.state, dispatch];
 }
 
+/**
+ * 부수 효과를 처리하기 위한 훅입니다.
+ * @param {function(): (void|function(): void)} effect
+ * @param {any[]} deps
+ */
 export function useEffect(effect, deps) {
   const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
   const prevDeps = oldHook?.deps || [];
@@ -101,6 +127,12 @@ export function useEffect(effect, deps) {
   Cache.hookIndex++;
 }
 
+/**
+ * 메모이제이션된 값을 반환하는 훅입니다.
+ * @param {function(): any} factory
+ * @param {any[]} deps
+ * @returns {*}
+ */
 export function useMemo(factory, deps) {
   const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
   const hasChanged = oldHook
@@ -119,11 +151,22 @@ export function useMemo(factory, deps) {
   return hook.value;
 }
 
+/**
+ * 메모이제이션된 콜백을 반환하는 훅입니다.
+ * @param {function(): any} callback
+ * @param {any[]} deps
+ * @returns {function(): any}
+ */
 export function useCallback(callback, deps) {
   // useMemo를 활용해 메모이제이션
   return useMemo(() => callback, deps);
 }
 
+/**
+ * ref 객체를 반환하는 훅입니다.
+ * @param {*} initialValue
+ * @returns {{current: *}}
+ */
 export function useRef(initialValue) {
   debug("USE_REF")("useRef initial:", initialValue);
   const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
@@ -139,6 +182,11 @@ export function useRef(initialValue) {
 const REACT_CONTEXT_TYPE = Symbol.for("react.context");
 const REACT_PROVIDER_TYPE = Symbol.for("react.provider");
 
+/**
+ * 컨텍스트 객체를 생성합니다.
+ * @param {*} defaultValue
+ * @returns {{$$typeof: symbol, _currentValue: *, Provider: {$$typeof: symbol, _context: *}}}
+ */
 export function createContext(defaultValue) {
   const context = {
     $$typeof: REACT_CONTEXT_TYPE,
@@ -152,6 +200,11 @@ export function createContext(defaultValue) {
   return context;
 }
 
+/**
+ * 컨텍스트 값을 읽어오는 훅입니다.
+ * @param {{_currentValue: *}} context
+ * @returns {*}
+ */
 export function useContext(context) {
   debug("USE_CONTEXT")("useContext for:", context);
   // 현재 컨텍스트 값을 읽어 반환합니다.

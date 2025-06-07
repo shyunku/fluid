@@ -17,6 +17,12 @@ export const EffectType = {
 };
 
 export class VNode {
+  /**
+   * 가상 노드를 생성합니다.
+   * @param {string|function} type
+   * @param {object} props
+   * @param {string|number} key
+   */
   constructor(type, props, key) {
     this.type = type;
     this.props = props;
@@ -25,6 +31,12 @@ export class VNode {
 }
 
 export class Fiber {
+  /**
+   * 파이버 노드를 생성합니다.
+   * @param {string|function} type
+   * @param {object} props
+   * @param {string|number} key
+   */
   constructor(type, props, key) {
     this.tag = Fiber.calculateTag(type); // HOST | COMPONENT
     this.type = type; // 문자열 태그 또는 함수
@@ -42,6 +54,11 @@ export class Fiber {
     this._contextHasChanged = false;
   }
 
+  /**
+   * 파이버의 태그를 계산합니다.
+   * @param {string|function} type
+   * @returns {string}
+   */
   static calculateTag(type) {
     if (type === null) return NodeTagType.HOST_ROOT;
     if (type === NodeType.TEXT) return NodeTagType.TEXT;
@@ -56,6 +73,10 @@ export class Fiber {
     return NodeTagType.COMPONENT;
   }
 
+  /**
+   * 파이버를 복제합니다.
+   * @returns {Fiber}
+   */
   clone() {
     const newFiber = new Fiber(this.type, this.props, this.key);
     newFiber.stateNode = this.stateNode;

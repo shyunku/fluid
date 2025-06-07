@@ -1,3 +1,9 @@
+/**
+ * 두 값의 변경 여부를 재귀적으로 확인합니다.
+ * @param {*} a
+ * @param {*} b
+ * @returns {boolean}
+ */
 export function changed(a, b) {
   if (a === b) return false;
   if (a == null || b == null) return a !== b;
@@ -78,11 +84,21 @@ export function changedLog(a, b) {
   }
 }
 
+/**
+ * 배열에서 특정 값을 제거합니다.
+ * @param {any[]} arr
+ * @param {*} value
+ */
 export function removeFromArray(arr, value) {
   const index = arr.indexOf(value);
   if (index > -1) arr.splice(index, 1);
 }
 
+/**
+ * 배열을 재귀적으로 평탄화합니다.
+ * @param {any[]} arr
+ * @returns {any[]}
+ */
 export function flatten(arr) {
   if (!Array.isArray(arr)) return arr;
   return arr.flat().reduce((acc, cur) => {

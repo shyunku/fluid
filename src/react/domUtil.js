@@ -1,6 +1,11 @@
 import { log } from "./logger.js";
-import { NodeTagType, EffectType } from "./types.js";
+import { NodeTagType, EffectType, Fiber } from "./types.js";
 
+/**
+ * 호스트 부모 파이버를 찾습니다.
+ * @param {Fiber} fiber
+ * @returns {Fiber | undefined}
+ */
 /* Host 부모 탐색 */
 export function findHostParentFiber(fiber) {
   let p = fiber.parent;
@@ -11,12 +16,22 @@ export function findHostParentFiber(fiber) {
   return p;
 }
 
+/**
+ * 호스트 부모 DOM을 찾습니다.
+ * @param {Fiber} fiber
+ * @returns {Node | null}
+ */
 export function findHostParentDom(fiber) {
   const parentFiber = findHostParentFiber(fiber);
   if (!parentFiber) return null;
   return parentFiber.stateNode ?? null;
 }
 
+/**
+ * 호스트 형제 DOM을 찾습니다.
+ * @param {Fiber} fiber
+ * @returns {Node | null}
+ */
 /* Host 형제 탐색 */
 export function findHostSiblingDom(fiber) {
   let node = fiber;
@@ -59,6 +74,12 @@ export function findHostSiblingDom(fiber) {
   return null; // 결국 찾지 못한 경우
 }
 
+/**
+ * DOM에 노드를 삽입하거나 추가합니다.
+ * @param {Fiber} node
+ * @param {Node} before
+ * @param {Node} parentDom
+ */
 export function insertOrAppendDom(node, before, parentDom) {
   if (node.tag === NodeTagType.HOST || node.tag === NodeTagType.TEXT) {
     const target = node.stateNode;

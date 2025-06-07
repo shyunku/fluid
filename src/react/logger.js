@@ -22,6 +22,11 @@ const LogFlags = {
 
 const noop = () => {};
 
+/**
+ * 로그를 출력합니다.
+ * @param {string} flag
+ * @returns {function(...*): void}
+ */
 export function log(flag) {
   if (flag) {
     return console.log.bind(console, `\x1b[37m[${flag}]\x1b[0m`);
@@ -29,6 +34,11 @@ export function log(flag) {
   return console.log.bind(console);
 }
 
+/**
+ * 디버그 로그를 출력합니다.
+ * @param {string} flag
+ * @returns {function(...*): void}
+ */
 // 디버그용 로그 헬퍼 함수
 export function debug(flag) {
   if (!LogFlags.hasOwnProperty(flag)) {
@@ -43,6 +53,11 @@ export function debug(flag) {
   return noop;
 }
 
+/**
+ * 경고 로그를 출력합니다.
+ * @param {string} flag
+ * @returns {function(...*): void}
+ */
 export function warn(flag) {
   if (!LogFlags.hasOwnProperty(flag)) {
     console.error(
@@ -53,6 +68,11 @@ export function warn(flag) {
   return console.warn.bind(console, `\x1b[33m[${flag}]\x1b[0m`);
 }
 
+/**
+ * 에러 로그를 출력합니다.
+ * @param {string} flag
+ * @returns {function(...*): void}
+ */
 export function error(flag) {
   if (!LogFlags.hasOwnProperty(flag)) {
     console.error(
@@ -63,6 +83,11 @@ export function error(flag) {
   return console.error.bind(console, `\x1b[31m[${flag}]\x1b[0m`);
 }
 
+/**
+ * 심각한 에러 로그를 출력합니다.
+ * @param {string} flag
+ * @returns {function(...*): void}
+ */
 export function fatal(flag) {
   if (!LogFlags.hasOwnProperty(flag)) {
     console.error(

@@ -1,3 +1,4 @@
+import { log } from "./logger.js";
 import { NodeTagType, EffectType } from "./types.js";
 
 /* Host 부모 탐색 */
@@ -41,6 +42,12 @@ export function findHostSiblingDom(fiber) {
       // 해당 형제가 `PLACEMENT` 태그가 붙어 있으면 건너뛰고 계속 진행
       if (node.effectTag && node.effectTag === EffectType.PLACEMENT)
         continue findSibling;
+
+      // 자식이 없는 컴포넌트는 DOM 노드를 포함하지 않으므로 건너뜁니다.
+      if (!node.child) {
+        // 이 경로에서는 찾을 수 없으므로 다음 형제를 탐색합니다.
+        continue findSibling;
+      }
       node = node.child; // 자식으로 내려가며 찾기
     }
 

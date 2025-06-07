@@ -37,4 +37,7 @@ export class Cache {
 
   // Context 스택
   static contextStack = [];
+
+  // 컨텍스트 변경에 따른 강제 리렌더링 카운터
+  static forceRenderDescendantsCount = 0;
 }

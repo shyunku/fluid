@@ -1,6 +1,6 @@
 import { Fiber, NodeTagType, EffectType, VNode } from "./types.js";
 import { prepareToRender, runEffects } from "./hooks.js";
-import { debug, warn } from "./logger.js";
+import { debug, warn, error } from "./logger.js";
 import { changed } from "./util.js";
 import {
   findHostParentDom,
@@ -56,7 +56,7 @@ export function render(element, container) {
   Cache.nextUnitOfWork = Cache.rootFiber;
   ensureWorkLoop();
 
-  debug("RENDER", "Render initialized:", Cache.rootFiber);
+  debug("RENDER")("Render initialized:", Cache.rootFiber);
   window.rootFiber = Cache.rootFiber;
 }
 
@@ -66,7 +66,7 @@ export function render(element, container) {
  * @returns {Fiber}
  */
 function performUnitOfWork(fiber) {
-  debug("PERFORM_UNIT", "performUnitOfWork on:", fiber);
+  debug("PERFORM_UNIT")("performUnitOfWork on:", fiber);
   beginWork(fiber);
 
   if (fiber.child) return fiber.child;
@@ -86,7 +86,7 @@ function performUnitOfWork(fiber) {
  * @returns {void}
  */
 function commitRoot() {
-  debug("COMMIT_ROOT", "Commit Root 시작");
+  debug("COMMIT_ROOT")("Commit Root 시작");
   Cache.deletions.forEach(commitWork);
   commitWork(Cache.rootFiber.child);
 
@@ -94,7 +94,7 @@ function commitRoot() {
   Cache.rootFiber = null;
 
   runEffects();
-  debug("COMMIT_ROOT", "Commit 완료, currentRoot set to:", Cache.currentRoot);
+  debug("COMMIT_ROOT")("Commit 완료, currentRoot set to:", Cache.currentRoot);
 }
 
 /**
@@ -107,7 +107,7 @@ function commitRoot() {
  * @returns {void}
  */
 function beginWork(fiber) {
-  debug("BEGIN_WORK", "beginWork:", fiber);
+  debug("BEGIN_WORK")("beginWork:", fiber);
   // console.log(fiber);
 
   switch (fiber.tag) {
@@ -116,11 +116,14 @@ function beginWork(fiber) {
       const value = fiber.props.value;
 
       const prevValue = context._currentValue;
+      if (changed(prevValue, value)) {
+        fiber._contextHasChanged = true;
+        Cache.forceRenderDescendantsCount++;
+      }
       Cache.contextStack.push(prevValue);
       context._currentValue = value;
 
-      debug(
-        "CONTEXT",
+      debug("CONTEXT")(
         "Provider found. Value pushed:",
         value,
         "Previous:",
@@ -153,10 +156,10 @@ function beginWork(fiber) {
         if (
           alternate &&
           !changed(fiber.props, alternate.props) &&
-          !hasPendingUpdates
+          !hasPendingUpdates &&
+          Cache.forceRenderDescendantsCount === 0
         ) {
-          debug(
-            "BEGIN_WORK",
+          debug("BEGIN_WORK")(
             "Bailout: Cloning children for",
             fiber.componentName
           );
@@ -186,21 +189,24 @@ function beginWork(fiber) {
           break;
         }
 
-        //console.log("update", fiber.componentName, fiber.props);
+        // console.log("update", fiber.componentName, fiber.props);
 
-        debug("BEGIN_WORK", "Component render for", fiber.componentName);
+        debug("BEGIN_WORK")("Component render for", fiber.componentName);
         prepareToRender(fiber);
-        const element = fiber.type(fiber.props) || { props: { children: [] } };
-        reconcileChildren(fiber, [element]);
+        const children = fiber.type(fiber.props);
+        reconcileChildren(
+          fiber,
+          Array.isArray(children) ? children : children ? [children] : []
+        );
       } catch (error) {
-        debug("ERROR_BOUNDARY", "Caught error in", fiber.componentName, error);
+        debug("ERROR_BOUNDARY")("Caught error in", fiber.componentName, error);
         let boundary = fiber.parent;
         while (boundary) {
           if (
             boundary.props &&
             typeof boundary.props.renderFallback === "function"
           ) {
-            debug("ERROR_BOUNDARY", "Found boundary:", boundary.componentName);
+            debug("ERROR_BOUNDARY")("Found boundary:", boundary.componentName);
             boundary.hasError = true;
             boundary.error = error;
             break;
@@ -208,7 +214,7 @@ function beginWork(fiber) {
           boundary = boundary.parent;
         }
         if (!boundary) {
-          console.error("Uncaught error:", error);
+          error("COMMIT_WORK")("Uncaught error:", error);
           throw error;
         }
       }
@@ -216,7 +222,7 @@ function beginWork(fiber) {
     }
     case NodeTagType.HOST: {
       if (!fiber.stateNode) {
-        debug("BEGIN_WORK", "Create host DOM:", fiber.type);
+        debug("BEGIN_WORK")("Create host DOM:", fiber.type);
         const dom = document.createElement(fiber.type);
         applyProps(dom, fiber.props);
         fiber.stateNode = dom;
@@ -242,14 +248,18 @@ function beginWork(fiber) {
  * @returns {void}
  */
 function completeWork(fiber) {
-  debug("COMPLETE_WORK", "completeWork for:", fiber);
+  debug("COMPLETE_WORK")("completeWork for:", fiber);
 
   if (fiber.tag === NodeTagType.PROVIDER) {
+    if (fiber._contextHasChanged) {
+      Cache.forceRenderDescendantsCount--;
+      fiber._contextHasChanged = false;
+    }
+
     const context = fiber.type._context;
     const prevValue = Cache.contextStack.pop();
     context._currentValue = prevValue;
-    debug(
-      "CONTEXT",
+    debug("CONTEXT")(
       "Provider complete. Value popped. Restored to:",
       prevValue
     );
@@ -285,7 +295,7 @@ function commitWork(fiber) {
 function commitPlacement(fiber) {
   const parentDom = findHostParentDom(fiber);
   if (!parentDom) {
-    console.error("Cannot find parent DOM for placement:", fiber);
+    error("COMMIT_WORK")("Cannot find parent DOM for placement:", fiber);
     return;
   }
 
@@ -297,7 +307,7 @@ function commitPlacement(fiber) {
 
   const beforeDom = findHostSiblingDom(fiber);
 
-  debug("COMMIT_WORK", "Placement:", fiber, parentDom, beforeDom);
+  debug("COMMIT_WORK")("Placement:", fiber, parentDom, beforeDom);
   insertOrAppendDom(fiber, beforeDom, parentDom);
 }
 
@@ -312,8 +322,7 @@ function commitUpdate(fiber) {
   if (fiber.tag !== NodeTagType.HOST && fiber.tag !== NodeTagType.TEXT) return;
   if (!(target instanceof Element) && !(target instanceof Text)) return;
 
-  debug(
-    "COMMIT_WORK",
+  debug("COMMIT_WORK")(
     "Update:",
     fiber,
     target,
@@ -332,21 +341,20 @@ function commitUpdate(fiber) {
  * @returns {void}
  */
 function commitDelete(fiber, explicitParentDom = null) {
-  debug("COMMIT_WORK", "Delete:", fiber);
+  debug("COMMIT_WORK")("Delete:", fiber);
   if (fiber.tag === NodeTagType.HOST || fiber.tag === NodeTagType.TEXT) {
     if (fiber.stateNode) {
       const parentDom = explicitParentDom || findHostParentDom(fiber);
       if (parentDom && fiber.stateNode.parentNode === parentDom) {
         parentDom.removeChild(fiber.stateNode);
       } else if (parentDom && !fiber.stateNode.parentNode) {
-        debug(
-          "COMMIT_WORK",
+        debug("COMMIT_WORK")(
           "Node already removed or parent mismatch:",
           fiber,
           parentDom
         );
       } else if (!parentDom) {
-        console.warn(
+        warn("COMMIT_WORK")(
           "Parent DOM not found for deletion of:",
           fiber,
           "Current parentNode:",
@@ -375,7 +383,7 @@ function commitDelete(fiber, explicitParentDom = null) {
  * @returns {void}
  */
 function applyProps(dom, props) {
-  debug("APPLY_PROPS", "applyProps for:", dom, props);
+  debug("APPLY_PROPS")("applyProps for:", dom, props);
 
   if (props.ref && typeof props.ref === "object") {
     props.ref.current = dom;
@@ -388,7 +396,7 @@ function applyProps(dom, props) {
     .forEach((name) => {
       if (name.startsWith("on") && typeof props[name] === "function") {
         const eventType = name.slice(2).toLowerCase();
-        debug("APPLY_PROPS", `addEventListener: ${eventType}`);
+        debug("APPLY_PROPS")(`addEventListener: ${eventType}`);
         switch (eventType) {
           case "change":
             dom.addEventListener("input", props[name]);
@@ -480,7 +488,7 @@ function updateDom(dom, prevProps, nextProps) {
  * @returns {void}
  */
 function reconcileChildren(wipFiber, vnodes) {
-  debug("RECONCILE", "Reconciling children for:", wipFiber, vnodes);
+  debug("RECONCILE")("Reconciling children for:", wipFiber, vnodes);
 
   const existing = {};
   let oldFiber = wipFiber.alternate?.child;
@@ -499,8 +507,7 @@ function reconcileChildren(wipFiber, vnodes) {
   // 명시적 key 중복 체크 및 경고 출력
   Object.entries(keyCount).forEach(([key, count]) => {
     if (count > 1) {
-      warn(
-        "RECONCILE",
+      warn("RECONCILE")(
         `key "${key}"가 자식들 사이에서 중복되었습니다.`,
         wipFiber
       );
@@ -606,7 +613,7 @@ function ensureWorkLoop() {
  */
 export function workLoop(deadline) {
   Cache.workLoopScheduled = false;
-  debug("WORK_LOOP", "workLoop tick");
+  debug("WORK_LOOP")("workLoop tick");
   let start = performance.now();
   while (Cache.nextUnitOfWork && !shouldYield(start, deadline)) {
     Cache.nextUnitOfWork = performUnitOfWork(Cache.nextUnitOfWork);

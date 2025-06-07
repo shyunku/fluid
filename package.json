@@ -1,8 +1,8 @@
 {
   "name": "mini-react",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "config": {
-    "core": "3.0.0-beta.2",
+    "core": "3.0.0-beta.3",
     "jsxVersion": "1.0.0"
   },
   "main": "index.js",

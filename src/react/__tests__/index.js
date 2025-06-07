@@ -1,5 +1,4 @@
-import { h } from "../h.js";
-import { render } from "../core.js";
+import { h, render } from "../index.js";
 import {
   useState,
   useEffect,
@@ -8,7 +7,10 @@ import {
   useCallback,
   createContext,
   useContext,
-} from "../hooks.js";
+  Router,
+  Route,
+  Link,
+} from "../index.js";
 
 // 1. Context 생성
 const ThemeContext = createContext("light");
@@ -152,4 +154,27 @@ const TestBed = () => {
   );
 };
 
-render(h(TestBed, {}), document.getElementById("root"));
+const HomePage = () => h("div", {}, h("h1", {}, "Home Page"));
+const AboutPage = () => h("div", {}, h("h1", {}, "About Page"));
+
+const App = () => {
+  return h(
+    "div",
+    {},
+    h(
+      "nav",
+      {},
+      h(Link, { to: "/" }, "Home"),
+      h("span", { style: "margin: 0 10px;" }, "|"),
+      h(Link, { to: "/about" }, "About"),
+      h("span", { style: "margin: 0 10px;" }, "|"),
+      h(Link, { to: "/testbed" }, "Test Bed")
+    ),
+    h("hr", {}),
+    h(Route, { path: "/", component: HomePage }),
+    h(Route, { path: "/about", component: AboutPage }),
+    h(Route, { path: "/testbed", component: TestBed })
+  );
+};
+
+render(h(Router, {}, h(App, {})), document.getElementById("root"));

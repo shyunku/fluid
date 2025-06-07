@@ -36,7 +36,7 @@ function flushUpdates() {
 export function scheduleUpdate() {
   if (Cache.scheduled) return; // 중복 예약 방지
   Cache.scheduled = true;
-  debug("SCHEDULE_UPDATE", "update batched");
+  debug("SCHEDULE_UPDATE")("update batched");
   queueMicrotask(flushUpdates); // 같은 tick 안의 setState 를 배칭
 }
 
@@ -50,7 +50,7 @@ export function runEffects() {
 }
 
 export function useState(initial) {
-  debug("USE_STATE", "useState initial:", initial);
+  debug("USE_STATE")("useState initial:", initial);
   const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
   const hook = oldHook || { state: initial, queue: [] };
 
@@ -60,12 +60,12 @@ export function useState(initial) {
   hook.queue = [];
 
   const setState = (action) => {
-    debug("USE_STATE", "state update queued:", action);
+    debug("USE_STATE")("state update queued:", action);
     hook.queue.push(typeof action === "function" ? action : () => action);
     scheduleUpdate();
   };
   Cache.wipFiber.hooks[Cache.hookIndex] = hook;
-  debug("USE_STATE", "hook stored at index", Cache.hookIndex, hook, hook.queue);
+  debug("USE_STATE")("hook stored at index", Cache.hookIndex, hook, hook.queue);
   Cache.hookIndex++;
   return [hook.state, setState];
 }
@@ -121,13 +121,13 @@ export function useCallback(callback, deps) {
 }
 
 export function useRef(initialValue) {
-  debug("USE_REF", "useRef initial:", initialValue);
+  debug("USE_REF")("useRef initial:", initialValue);
   const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
   // 첫 렌더링 시에는 ref 객체를 생성하고, 이후에는 기존 객체를 재사용합니다.
   const hook = oldHook || { current: initialValue };
 
   Cache.wipFiber.hooks[Cache.hookIndex] = hook;
-  debug("USE_REF", "hook stored at index", Cache.hookIndex, hook);
+  debug("USE_REF")("hook stored at index", Cache.hookIndex, hook);
   Cache.hookIndex++;
   return hook;
 }
@@ -149,7 +149,7 @@ export function createContext(defaultValue) {
 }
 
 export function useContext(context) {
-  debug("USE_CONTEXT", "useContext for:", context);
+  debug("USE_CONTEXT")("useContext for:", context);
   // 현재 컨텍스트 값을 읽어 반환합니다.
   // 값의 업데이트는 Provider의 value prop 변경과 리렌더링에 의해 처리됩니다.
   return context._currentValue;

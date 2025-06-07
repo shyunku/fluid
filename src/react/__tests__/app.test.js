@@ -11,9 +11,22 @@ global.requestIdleCallback = (callback) => {
   return 1;
 };
 
+let activeElement;
+
 // JSDOM focus/blur 기능 모킹
-const MOCK_FOCUS = jest.fn();
-const MOCK_BLUR = jest.fn();
+// `focus` 호출 시 `document.activeElement`를 설정하도록 모의 함수를 확장합니다.
+Object.defineProperty(document, "activeElement", {
+  get: () => activeElement,
+});
+
+const MOCK_FOCUS = jest.fn(function () {
+  activeElement = this;
+});
+const MOCK_BLUR = jest.fn(function () {
+  if (activeElement === this) {
+    activeElement = document.body;
+  }
+});
 window.HTMLElement.prototype.focus = MOCK_FOCUS;
 window.HTMLElement.prototype.blur = MOCK_BLUR;
 
@@ -59,9 +72,10 @@ describe("Mini-React App Test", () => {
       }
     });
 
-    // Mock 함수 초기화
+    // Mock 함수 초기화 및 activeElement 리셋
     MOCK_FOCUS.mockClear();
     MOCK_BLUR.mockClear();
+    activeElement = document.body;
 
     // index.js 실행 (초기 렌더링)
     require("./index.js");

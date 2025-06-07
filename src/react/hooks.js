@@ -49,25 +49,29 @@ export function runEffects() {
   Cache.pendingEffects.length = 0;
 }
 
-export function useState(initial) {
-  debug("USE_STATE")("useState initial:", initial);
+export function useState(initialState) {
+  return useReducer((state, action) => {
+    return typeof action === "function" ? action(state) : action;
+  }, initialState);
+}
+
+export function useReducer(reducer, initialState) {
   const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
-  const hook = oldHook || { state: initial, queue: [] };
+  const hook = oldHook || { state: initialState, queue: [] };
 
   hook.queue.forEach((action) => {
-    hook.state = action(hook.state);
+    hook.state = reducer(hook.state, action);
   });
   hook.queue = [];
 
-  const setState = (action) => {
-    debug("USE_STATE")("state update queued:", action);
-    hook.queue.push(typeof action === "function" ? action : () => action);
+  const dispatch = (action) => {
+    hook.queue.push(action);
     scheduleUpdate();
   };
+
   Cache.wipFiber.hooks[Cache.hookIndex] = hook;
-  debug("USE_STATE")("hook stored at index", Cache.hookIndex, hook, hook.queue);
   Cache.hookIndex++;
-  return [hook.state, setState];
+  return [hook.state, dispatch];
 }
 
 export function useEffect(effect, deps) {

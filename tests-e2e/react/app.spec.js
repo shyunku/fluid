@@ -17,7 +17,7 @@ test.describe("Mini-React E2E Test Bed", () => {
   test("should toggle theme when 'Toggle Theme' button is clicked", async ({
     page,
   }) => {
-    const themeButton = page.getByTestId("toggle-theme");
+    const themeButton = page.getByRole("button", { name: /Toggle Theme/ });
     await expect(themeButton).toContainText("Current: light");
     const initialStyle = await themeButton.getAttribute("style");
 
@@ -35,13 +35,13 @@ test.describe("Mini-React E2E Test Bed", () => {
   test("should increment counter when 'Increment' button is clicked", async ({
     page,
   }) => {
-    await page.getByTestId("increment").click();
+    await page.getByRole("button", { name: "Increment" }).click();
     await expect(page.locator("p").first()).toHaveText("Count: 1");
   });
 
   test("should add an item to the list and focus input", async ({ page }) => {
-    const input = page.locator("input");
-    const addButton = page.getByTestId("add-item");
+    const input = page.getByRole("textbox", { name: /new item/i });
+    const addButton = page.getByRole("button", { name: "Add Item" });
 
     await input.fill("Durian");
     await addButton.click();
@@ -55,7 +55,11 @@ test.describe("Mini-React E2E Test Bed", () => {
   test("should remove an item from the list", async ({ page }) => {
     await expect(page.locator("li")).toHaveCount(3);
 
-    await page.getByTestId("remove-Banana").click();
+    await page
+      .locator("li")
+      .filter({ hasText: "Banana" })
+      .getByRole("button", { name: "X" })
+      .click();
 
     await expect(page.locator("li")).toHaveCount(2);
     const texts = await page.locator("li").allTextContents();
@@ -65,7 +69,7 @@ test.describe("Mini-React E2E Test Bed", () => {
   });
 
   test("should reverse the list order", async ({ page }) => {
-    await page.getByTestId("reverse-list").click();
+    await page.getByRole("button", { name: "Reverse List" }).click();
     const items = page.locator("li");
     await expect(items).toHaveCount(3);
     await expect(items.nth(0)).toContainText("Cherry");
@@ -76,9 +80,9 @@ test.describe("Mini-React E2E Test Bed", () => {
   test("should focus the input when 'Focus Input' button is clicked", async ({
     page,
   }) => {
-    const input = page.locator("input");
+    const input = page.getByRole("textbox", { name: /new item/i });
     await expect(input).not.toBeFocused();
-    await page.getByTestId("focus-input").click();
+    await page.getByRole("button", { name: "Click to Focus Input" }).click();
     await expect(input).toBeFocused();
   });
 });

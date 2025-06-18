@@ -73,7 +73,7 @@ const TestBed = () => {
     h(
       "div",
       { className: "test-container" },
-      h("h1", {}, "Mini-React Test Bed"),
+      h("h1", {}, "Mini-React Test         Bed"),
 
       h(
         "div",
@@ -162,19 +162,23 @@ const App = () => {
     "div",
     {},
     h(
-      "nav",
+      Router,
       {},
-      h(Link, { to: "/" }, "Home"),
-      h("span", { style: "margin: 0 10px;" }, "|"),
-      h(Link, { to: "/about" }, "About"),
-      h("span", { style: "margin: 0 10px;" }, "|"),
-      h(Link, { to: "/testbed" }, "Test Bed")
-    ),
-    h("hr", {}),
-    h(Route, { path: "/", component: HomePage }),
-    h(Route, { path: "/about", component: AboutPage }),
-    h(Route, { path: "/testbed", component: TestBed })
+      h(
+        "nav",
+        {},
+        h(Link, { to: "/" }, "Home"),
+        h("span", { style: "margin: 0 10px;" }, "|"),
+        h(Link, { to: "/about" }, "About"),
+        h("span", { style: "margin: 0 10px;" }, "|"),
+        h(Link, { to: "/testbed" }, "Test Bed")
+      ),
+      h("hr", {}),
+      h(Route, { path: "/", component: HomePage }),
+      h(Route, { path: "/about", component: AboutPage }),
+      h(Route, { path: "/testbed", component: TestBed })
+    )
   );
 };
 
-render(h(Router, {}, h(App, {})), document.getElementById("root"));
+render(App, document.getElementById("root"));

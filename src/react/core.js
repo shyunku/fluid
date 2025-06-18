@@ -2,6 +2,7 @@ import { Fiber, NodeTagType, EffectType, VNode } from "./types.js";
 import { prepareToRender, runEffects } from "./hooks.js";
 import { debug, warn, error } from "./logger.js";
 import { changed } from "./util.js";
+import { h } from "./h.js";
 import {
   findHostParentDom,
   findHostSiblingDom,
@@ -48,7 +49,7 @@ export function render(element, container) {
 
   const vnode =
     typeof Cache.rootComponent === "function"
-      ? Cache.rootComponent()
+      ? h(Cache.rootComponent)
       : Cache.rootComponent;
   Cache.rootFiber.props = { children: [vnode] };
 
@@ -135,8 +136,12 @@ function beginWork(fiber) {
     }
     case NodeTagType.TEXT: {
       if (fiber.effectTag === EffectType.PLACEMENT) {
-        const textNode = document.createTextNode(fiber.props.nodeValue);
-        fiber.stateNode = textNode;
+        let text = fiber.props.nodeValue;
+        if (text) {
+          if (typeof text === "string") text = text.replace(/ /g, "\u00A0");
+          const textNode = document.createTextNode(text);
+          fiber.stateNode = textNode;
+        }
       }
       break;
     }
@@ -214,7 +219,6 @@ function beginWork(fiber) {
           boundary = boundary.parent;
         }
         if (!boundary) {
-          error("COMMIT_WORK")("Uncaught error:", error);
           throw error;
         }
       }

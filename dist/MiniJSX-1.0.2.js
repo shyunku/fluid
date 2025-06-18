@@ -1,4 +1,4 @@
-/* MiniJSX v1.0.0 */
+/* MiniJSX v1.0.2 */
 var MiniJSX = (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -370,8 +370,7 @@ var MiniJSX = (() => {
         }
         case "Text": {
           if (!/[^\s]/.test(node.value)) return "";
-          const txt = node.value.replace(/\s+/g, " ").trim();
-          return JSON.stringify(txt);
+          return JSON.stringify(node.value);
         }
         case "Expression": {
           const src = node.code;
@@ -412,31 +411,51 @@ var MiniJSX = (() => {
       }
       throw Error("unbalanced");
     }
-    document.querySelectorAll('script[type="text/jsx"]').forEach(async (script) => {
-      const source = script.src ? await (await fetch(script.src)).text() : script.textContent;
-      const pattern = /return\s*\(/g;
-      let match, offset = 0, out = "";
-      while (match = pattern.exec(source)) {
-        const start = match.index + match[0].length - 1;
-        const { code: inner, endIdx } = balance(source, start);
-        if (!/^\s*</.test(inner)) {
-          out += source.slice(offset, endIdx + 1);
-          offset = endIdx + 1;
-          if (source[offset] === ";") offset++;
-          continue;
+    document.addEventListener("DOMContentLoaded", () => {
+      document.querySelectorAll('script[type="text/jsx"]').forEach((script) => {
+        const transformSource = (source) => {
+          const pattern = /return\s*\(/g;
+          let match, offset = 0, out = "";
+          while (match = pattern.exec(source)) {
+            const start = match.index + match[0].length - 1;
+            const { code: inner, endIdx } = balance(source, start);
+            if (!/^\s*</.test(inner)) {
+              out += source.slice(offset, endIdx + 1);
+              offset = endIdx + 1;
+              if (source[offset] === ";") offset++;
+              continue;
+            }
+            const usePrettify = true;
+            const compiled = usePrettify ? prettify(gen(parse(inner))) : gen(parse(inner));
+            out += source.slice(offset, start) + compiled;
+            let nextPos = endIdx + 1;
+            if (source[nextPos] === ";") nextPos++;
+            offset = nextPos;
+          }
+          const finalSrc = out + source.slice(offset);
+          const blob = new Blob([finalSrc], { type: "text/javascript" });
+          const tag = document.createElement("script");
+          tag.src = URL.createObjectURL(blob);
+          document.head.appendChild(tag);
+        };
+        const loadScript = async () => {
+          const source = await (await fetch(script.src)).text();
+          transformSource(source);
+        };
+        if (script.src) {
+          if (window.location.protocol === "file:") {
+            console.warn(
+              `File transformation is blocked because current location is on file system. Use inline source instead. Target:`,
+              script.src
+            );
+          } else {
+            loadScript();
+          }
+        } else {
+          const source = script.textContent;
+          transformSource(source);
         }
-        const compiled = prettify(gen(parse(inner)));
-        out += source.slice(offset, start) + compiled;
-        let nextPos = endIdx + 1;
-        if (source[nextPos] === ";") nextPos++;
-        offset = nextPos;
-      }
-      const finalSrc = out + source.slice(offset);
-      const blob = new Blob([finalSrc], { type: "text/javascript" });
-      const tag = document.createElement("script");
-      tag.type = "module";
-      tag.src = URL.createObjectURL(blob);
-      document.head.appendChild(tag);
+      });
     });
   })();
   return __toCommonJS(index_exports);

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>MiniJSX Test</title>
+    <script src="../../dist/MiniReact-3.0.3.js"></script>
+    <style>
+      html {
+        font-size: 12px;
+      }
+      .header {
+        display: flex;
+        align-items: center;
+      }
+      .header .id {
+        margin-right: 5px;
+      }
+      .item-list {
+        display: flex;
+        flex-direction: column;
+      }
+      .item {
+        padding: 3px;
+        box-sizing: border-box;
+        background-color: rgba(0, 0, 0, 0.174);
+      }
+      @keyframes fade {
+        0% {
+          transform: scale(1.03);
+        }
+
+        100% {
+          transform: scale(1);
+        }
+      }
+      * {
+        animation: fade 0.5s ease;
+      }
+    </style>
+      <script src="../../dist/MiniJSX-1.0.2.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/jsx">
+      const { useState, useEffect, useMemo, render, h } = MiniReact;
+
+      const App = () => {
+        return (
+          <SubItem
+            id={0}
+            key={0}
+            depth={0}
+            parentId={null}
+            index={0}
+            indexEnd={0}
+            style={{ marginLeft: "30px" }}
+            check={false}
+          />
+        );
+      };
+
+      // SubItem 컴포넌트 정의
+      const SubItem = ({
+        id,
+        parentId,
+        index,
+        indexEnd,
+        onItemMove: onParentItemMove,
+        depth,
+      }) => {
+        const [items, setItems] = useState([]);
+        const [input, setInput] = useState("");
+        const [duration, setDuration] = useState(0);
+        const thisId = useMemo(
+          () => `${parentId ? `${parentId}.` : ""}${id}`,
+          [parentId, id]
+        );
+        const startTime = useMemo(() => Date.now(), []);
+
+        const onItemClick = () => {
+          setItems((items) => [{ id: items.length + 1, depth: depth + 1 }, ...items]);
+        };
+
+        const onItemMove = (index, offset) => {
+          setItems((prevItems) => {
+            const newItems = [...prevItems];
+            const [movedItem] = newItems.splice(index, 1);
+            const finalPos = Math.max(0, Math.min(newItems.length, index + offset));
+            newItems.splice(finalPos, 0, movedItem);
+            return newItems;
+          });
+        };
+
+        useEffect(() => {
+          // let t = setInterval(() => {
+          //   setDuration(Date.now() - startTime);
+          // }, 0);
+          // return () => {
+          //   clearInterval(t);
+          // };
+        }, []);
+
+        return (
+          <div className="item" style={{ marginLeft: `${20}px` }}>
+            <div className="header">
+              <div className="id">id: {thisId}</div>
+              <button onClick={onItemClick}>add child</button>
+              {parentId != null && index > 0 && (
+                <button onClick={(e) => onParentItemMove(index, -1)}>up</button>
+              )}
+              {parentId != null && index < indexEnd && (
+                <button onClick={(e) => onParentItemMove(index, 1)}>down</button>
+              )}
+              <input onChange={(e) => setInput(e.target.value)} value={input} />
+              {input}/{duration}ms, Test String: here         and here
+            </div>
+            <div className="item-list">
+              {items.map((item, iind) => (
+                <SubItem
+                  {...item}
+                  key={`${thisId}.` + item.id}
+                  parentId={thisId}
+                  index={iind}
+                  indexEnd={items.length - 1}
+                  onItemMove={onItemMove}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      };
+
+      render(App, document.getElementById("root"));
+    </script>
+  </body>
+</html>

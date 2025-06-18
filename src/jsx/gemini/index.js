@@ -1,11 +1,9 @@
-import { transformJsx } from "./transformer.js";
+import { transformJsx } from "./core_2.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll('script[type="text/jsx"]').forEach((script) => {
     const transformSource = (source) => {
-      const transformed = transformJsx(source, true);
-      const finalSrc = transformed;
-
+      const finalSrc = transformJsx(source);
       const blob = new Blob([finalSrc], { type: "text/javascript" });
       const tag = document.createElement("script");
       tag.src = URL.createObjectURL(blob);

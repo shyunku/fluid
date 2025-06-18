@@ -1,6 +1,6 @@
 const { useState, useEffect, useMemo, render, h } = MiniReact;
 
-export const App = () => {
+const App = () => {
   return (
     <SubItem
       id={0}
@@ -68,7 +68,7 @@ const SubItem = ({
           <button onClick={(e) => onParentItemMove(index, 1)}>down</button>
         )}
         <input onChange={(e) => setInput(e.target.value)} value={input} />
-        {input}/{duration}ms
+        {input}/{duration}ms, Test String: here and here
       </div>
       <div className="item-list">
         {items.map((item, iind) => (
@@ -82,6 +82,11 @@ const SubItem = ({
           />
         ))}
       </div>
+      {Array(5)
+        .fill(null)
+        .map((e, ind) => {
+          return <div>{ind}</div>;
+        })}
     </div>
   );
 };

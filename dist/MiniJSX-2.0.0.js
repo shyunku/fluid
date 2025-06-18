@@ -1,9 +1,25 @@
 /* MiniJSX v2.0.0 */
 var MiniJSX = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/jsx/index.js
+  var index_exports = {};
+
   // src/jsx/transformer.js
   var ENABLE_FORMATTING = true;
   function transformJsx(sourceCode, format = ENABLE_FORMATTING) {
-    console.log(format ? `Using prettify` : `Prettify disabled.`);
     ENABLE_FORMATTING = format;
     let output = "";
     let cursor = 0;
@@ -365,7 +381,7 @@ var MiniJSX = (() => {
     return null;
   }
 
-  // src/jsx/index.js
+  // src/jsx/core.js
   document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll('script[type="text/jsx"]').forEach((script) => {
       const transformSource = (source) => {
@@ -395,4 +411,5 @@ var MiniJSX = (() => {
       }
     });
   });
+  return __toCommonJS(index_exports);
 })();

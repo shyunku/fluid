@@ -21,7 +21,6 @@ let ENABLE_FORMATTING = true;
  * @returns {string} 변환된 JavaScript 코드.
  */
 export function transformJsx(sourceCode, format = ENABLE_FORMATTING) {
-  console.log(format ? `Using prettify` : `Prettify disabled.`);
   ENABLE_FORMATTING = format; // 외부에서 받은 인자로 플래그 설정
   let output = "";
   let cursor = 0;

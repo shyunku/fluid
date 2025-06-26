@@ -48,6 +48,10 @@ const SubItem = ({
   };
 
   useEffect(() => {
+    const j = 10;
+    for (let i = 0; i < j; i++) {
+      console.log(i);
+    }
     // let t = setInterval(() => {
     //   setDuration(Date.now() - startTime);
     // }, 0);
@@ -69,6 +73,7 @@ const SubItem = ({
         )}
         <input onChange={(e) => setInput(e.target.value)} value={input} />
         {input}/{duration}ms, Test String: here and here
+        <span>{duration}</span>
       </div>
       <div className="item-list">
         {items.map((item, iind) => (

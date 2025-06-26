@@ -78,7 +78,10 @@ export function useState(initialState) {
  */
 export function useReducer(reducer, initialState) {
   const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
-  const hook = oldHook || { state: initialState, queue: [] };
+  const hook = oldHook || {
+    state: typeof initialState === "function" ? initialState() : initialState,
+    queue: [],
+  };
 
   hook.queue.forEach((action) => {
     hook.state = reducer(hook.state, action);

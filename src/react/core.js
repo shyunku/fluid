@@ -137,7 +137,7 @@ function beginWork(fiber) {
     case NodeTagType.TEXT: {
       if (fiber.effectTag === EffectType.PLACEMENT) {
         let text = fiber.props.nodeValue;
-        if (text) {
+        if (text !== null && text !== undefined) {
           if (typeof text === "string") text = text.replace(/ /g, "\u00A0");
           const textNode = document.createTextNode(text);
           fiber.stateNode = textNode;

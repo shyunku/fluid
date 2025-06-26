@@ -349,8 +349,8 @@ function generateCode(node, indent = 0) {
       return JSON.stringify(node.value);
     }
     case "Text": {
-      const cleanedText = node.value.replace(/\s+/g, " ").trim();
-      return cleanedText ? JSON.stringify(cleanedText) : null;
+      const collapsedText = node.value.replace(/\s+/g, " ");
+      return collapsedText ? JSON.stringify(collapsedText) : null;
     }
     default:
       return "";
@@ -437,25 +437,59 @@ function findNextJsxStart(source, startIndex) {
       continue;
     }
 
-    if (char === "<") {
-      if (/[a-zA-Z/]/.test(nextChar)) {
-        const prevChar = getPrevMeaningfulChar(source, i);
-        if (prevChar !== "=" && prevChar !== "<" && prevChar !== ">") {
+    if (char === "<" && /[a-zA-Z\/]/.test(nextChar)) {
+      // '<' 문자를 찾았을 때, JSX 시작인지 판단하는 새로운 로직
+
+      let j = i - 1;
+      // '<' 앞의 공백 건너뛰기
+      while (j >= 0 && /\s/.test(source[j])) {
+        j--;
+      }
+
+      // 파일의 시작이거나, 표현식이 올 수 있는 명확한 문자 뒤에 오는 경우
+      const prevChar = j < 0 ? null : source[j];
+      const allowedPrevChars = /[\(\[{,;=:\?|&!~%^\+\-\*\/]/;
+      if (prevChar === null || allowedPrevChars.test(prevChar)) {
+        return i;
+      }
+
+      // 화살표 함수 `=> <...` 케이스 처리
+      if (prevChar === ">") {
+        let k = j - 1;
+        while (k >= 0 && /\s/.test(source[k])) {
+          k--;
+        }
+        if (k >= 0 && source[k] === "=") {
           return i;
         }
       }
+
+      // `return <...`, `yield <...` 와 같은 키워드 케이스 처리
+      if (/[a-zA-Z]/.test(prevChar)) {
+        let startOfWord = j;
+        while (
+          startOfWord > 0 &&
+          /[a-zA-Z0-9_$]/.test(source[startOfWord - 1])
+        ) {
+          startOfWord--;
+        }
+        const word = source.slice(startOfWord, j + 1);
+        const keywords = new Set([
+          "return",
+          "yield",
+          "case",
+          "throw",
+          "delete",
+          "void",
+          "typeof",
+        ]);
+        if (keywords.has(word)) {
+          return i;
+        }
+      }
+
+      // 위 조건에 해당하지 않으면 비교 연산자(i < j)나 닫는 꺽쇠(<a> b > c)로 간주하고 무시
     }
   }
   return -1;
-}
-
-function getPrevMeaningfulChar(source, index) {
-  let i = index - 1;
-  while (i >= 0) {
-    if (/\S/.test(source[i])) {
-      return source[i];
-    }
-    i--;
-  }
-  return null;
 }

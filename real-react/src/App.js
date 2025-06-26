@@ -61,7 +61,7 @@ const SubItem = ({
       id={`item_${thisId?.replace(/\./g, "_") ?? "unknown"}`}
     >
       <div className="header">
-        <div className="id">id: {thisId}</div>
+        <div className="id">id: {thisId} </div>
         <button className="add-child" onClick={onItemAdd}>
           child
         </button>

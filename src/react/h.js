@@ -11,7 +11,10 @@ import { flatten } from "./util.js";
 export function h(type, props = {}, ...children) {
   props = props || {};
   const normalizedChildren = flatten(children)
-    .filter(Boolean)
+    .filter(
+      (child) =>
+        child !== null && child !== undefined && typeof child !== "boolean"
+    )
     .map((child) => {
       return typeof child === "object"
         ? child

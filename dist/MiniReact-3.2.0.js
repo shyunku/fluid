@@ -1,4 +1,4 @@
-/* MiniReact v3.0.0 */
+/* MiniReact v3.2.0 */
 var MiniReact = (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -244,7 +244,10 @@ var MiniReact = (() => {
   }
   function useReducer(reducer, initialState) {
     const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
-    const hook = oldHook || { state: initialState, queue: [] };
+    const hook = oldHook || {
+      state: typeof initialState === "function" ? initialState() : initialState,
+      queue: []
+    };
     hook.queue.forEach((action) => {
       hook.state = reducer(hook.state, action);
     });
@@ -342,6 +345,21 @@ var MiniReact = (() => {
     }, []);
   }
 
+  // src/react/h.js
+  function h(type, props = {}, ...children) {
+    props = props || {};
+    const normalizedChildren = flatten(children).filter(
+      (child) => child !== null && child !== void 0 && typeof child !== "boolean"
+    ).map((child) => {
+      return typeof child === "object" ? child : new VNode(NodeTagType.TEXT, { nodeValue: child, children: [] }, null);
+    });
+    return new VNode(
+      type,
+      { ...props, children: normalizedChildren },
+      props.key || null
+    );
+  }
+
   // src/react/domUtil.js
   function findHostParentFiber(fiber) {
     let p = fiber.parent;
@@ -411,7 +429,7 @@ var MiniReact = (() => {
     Cache.rootFiber.stateNode = Cache.rootTarget;
     Cache.rootFiber.alternate = Cache.currentRoot;
     prepareToRender(Cache.rootFiber);
-    const vnode = typeof Cache.rootComponent === "function" ? Cache.rootComponent() : Cache.rootComponent;
+    const vnode = typeof Cache.rootComponent === "function" ? h(Cache.rootComponent) : Cache.rootComponent;
     Cache.rootFiber.props = { children: [vnode] };
     Cache.deletions = [];
     Cache.nextUnitOfWork = Cache.rootFiber;
@@ -464,8 +482,12 @@ var MiniReact = (() => {
       }
       case NodeTagType.TEXT: {
         if (fiber.effectTag === EffectType.PLACEMENT) {
-          const textNode = document.createTextNode(fiber.props.nodeValue);
-          fiber.stateNode = textNode;
+          let text = fiber.props.nodeValue;
+          if (text !== null && text !== void 0) {
+            if (typeof text === "string") text = text.replace(/ /g, "\xA0");
+            const textNode = document.createTextNode(text);
+            fiber.stateNode = textNode;
+          }
         }
         break;
       }
@@ -526,7 +548,6 @@ var MiniReact = (() => {
             boundary = boundary.parent;
           }
           if (!boundary) {
-            error2("COMMIT_WORK")("Uncaught error:", error2);
             throw error2;
           }
         }
@@ -814,19 +835,6 @@ var MiniReact = (() => {
         ensureWorkLoop();
       }
     }
-  }
-
-  // src/react/h.js
-  function h(type, props = {}, ...children) {
-    props = props || {};
-    const normalizedChildren = flatten(children).filter(Boolean).map((child) => {
-      return typeof child === "object" ? child : new VNode(NodeTagType.TEXT, { nodeValue: child, children: [] }, null);
-    });
-    return new VNode(
-      type,
-      { ...props, children: normalizedChildren },
-      props.key || null
-    );
   }
 
   // src/react/router.js

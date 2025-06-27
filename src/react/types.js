@@ -43,7 +43,7 @@ export class Fiber {
     this.props = props; // props + children
     this.key = key;
     this.stateNode = null; // FiberNode 연결
-    this.hooks = []; // useState 훅 저장소
+    this.memoizedState = null; // 상태를 저장하는 곳 (first hook)
     this.alternate = null; // 이전 렌더 트리 참조
     this.parent = null;
     this.child = null;
@@ -80,13 +80,8 @@ export class Fiber {
   clone() {
     const newFiber = new Fiber(this.type, this.props, this.key);
     newFiber.stateNode = this.stateNode;
-
-    if (this.alternate) {
-      this.alternate = null; // 이전 렌더 트리 참조를 해제합니다.
-    }
-
     newFiber.alternate = this;
-    newFiber.hooks = this.hooks;
+    this.alternate = null; // 이전 파이버는 더 이상 참조하지 않음
     return newFiber;
   }
 }

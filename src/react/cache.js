@@ -23,8 +23,11 @@ export class Cache {
   // 현재 렌더링 중인 Fiber
   static wipFiber = null;
 
-  // hooks.js에서 사용될 변수들
-  static hookIndex = 0;
+  // alternate(current) 훅 리스트를 순회하는 포인터
+  static currentHook = null;
+
+  // wip 훅 리스트를 순회하는 포인터
+  static wipHook = null;
 
   // 렌더링
   static renderFunc = null;

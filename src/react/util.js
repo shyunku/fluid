@@ -105,3 +105,21 @@ export function flatten(arr) {
     return acc.concat(flatten(cur));
   }, []);
 }
+
+export function getAllInfiniteChainFiber(fiber, depth = 0, zDepth = 0) {
+  if (!fiber) return;
+  if (fiber.alternate) {
+    if (zDepth > 15) {
+      console.warn(
+        `Infinite loop detected at depth ${zDepth} with fiber:`,
+        fiber
+      );
+      throw new Error();
+    }
+    getAllInfiniteChainFiber(fiber.alternate, depth, zDepth + 1);
+  }
+  if (fiber.child) getAllInfiniteChainFiber(fiber.child, depth + 1, zDepth);
+  if (fiber.sibling) getAllInfiniteChainFiber(fiber.sibling, depth, zDepth);
+}
+
+window.getAllInfiniteChainFiber = getAllInfiniteChainFiber;

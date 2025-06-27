@@ -9,8 +9,8 @@ import { Fiber } from "./types.js";
  */
 export function prepareToRender(fiber) {
   Cache.wipFiber = fiber;
-  Cache.wipFiber.hooks = [];
-  Cache.hookIndex = 0;
+  Cache.wipHook = null;
+  Cache.currentHook = null;
 }
 
 /**
@@ -34,6 +34,7 @@ function flushUpdates() {
   Cache.nextUnitOfWork = Cache.rootFiber;
 
   window.rootFiber = Cache.rootFiber;
+  window.currentRoot = Cache.currentRoot;
   ensureWorkLoop();
   // window.requestIdleCallback(workLoop);
 }
@@ -53,8 +54,69 @@ export function scheduleUpdate() {
  */
 export function runEffects() {
   // 이 함수는 core.js의 commitRoot 이후에 호출되어야 합니다.
-  Cache.pendingEffects.forEach((fn) => fn());
+  Cache.pendingEffects.forEach((effect) => {
+    // 이전 effect의 cleanup 함수가 있다면 실행
+    if (effect.destroy) {
+      effect.destroy();
+    }
+    // 새로운 effect를 실행하고, cleanup 함수를 돌려받아 저장
+    const cleanupFn = effect.create();
+    if (typeof cleanupFn === "function") {
+      effect.destroy = cleanupFn;
+    }
+  });
   Cache.pendingEffects.length = 0;
+}
+
+// 훅을 마운트/업데이트하는 헬퍼 함수
+function mountWorkInProgressHook() {
+  const hook = {
+    memoizedState: null,
+    queue: null,
+    next: null,
+  };
+
+  if (Cache.wipHook === null) {
+    Cache.wipFiber.memoizedState = Cache.wipHook = hook;
+  } else {
+    Cache.wipHook = Cache.wipHook.next = hook;
+  }
+  return Cache.wipHook;
+}
+
+// alternate(current) 파이버에서 대응하는 훅을 가져옵니다.
+function updateWorkInProgressHook() {
+  const oldHook = Cache.currentHook
+    ? Cache.currentHook.next
+    : Cache.wipFiber.alternate.memoizedState;
+  Cache.currentHook = oldHook;
+
+  const newHook = {
+    memoizedState: oldHook.memoizedState,
+    queue: oldHook.queue,
+    next: null,
+    deps: oldHook.deps,
+  };
+
+  if (Cache.wipHook === null) {
+    Cache.wipFiber.memoizedState = Cache.wipHook = newHook;
+  } else {
+    Cache.wipHook = Cache.wipHook.next = newHook;
+  }
+  return Cache.wipHook;
+}
+
+function dispatchAction(queue, action) {
+  const update = { action, next: null };
+  const pending = queue.pending;
+  if (pending === null) {
+    update.next = update;
+  } else {
+    update.next = pending.next;
+    pending.next = update;
+  }
+  queue.pending = update;
+  scheduleUpdate();
 }
 
 /**
@@ -75,25 +137,32 @@ export function useState(initialState) {
  * @returns {Array} - state와 dispatch 함수를 포함하는 배열
  */
 export function useReducer(reducer, initialState) {
-  const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
-  const hook = oldHook || {
-    state: typeof initialState === "function" ? initialState() : initialState,
-    queue: [],
-  };
+  const hook = Cache.wipFiber.alternate
+    ? updateWorkInProgressHook()
+    : mountWorkInProgressHook();
 
-  hook.queue.forEach((action) => {
-    hook.state = reducer(hook.state, action);
-  });
-  hook.queue = [];
+  if (hook.queue === null) {
+    // 마운트 시, 큐와 dispatch를 생성
+    hook.memoizedState =
+      typeof initialState === "function" ? initialState() : initialState;
+    hook.queue = { pending: null };
+    const dispatch = dispatchAction.bind(null, hook.queue);
+    hook.queue.dispatch = dispatch;
+  }
 
-  const dispatch = (action) => {
-    hook.queue.push(action);
-    scheduleUpdate();
-  };
+  if (hook.queue.pending) {
+    let firstUpdate = hook.queue.pending.next;
+    let newState = hook.memoizedState;
+    do {
+      newState = reducer(newState, firstUpdate.action);
+      firstUpdate = firstUpdate.next;
+    } while (firstUpdate !== hook.queue.pending.next);
 
-  Cache.wipFiber.hooks[Cache.hookIndex] = hook;
-  Cache.hookIndex++;
-  return [hook.state, dispatch];
+    hook.memoizedState = newState;
+    hook.queue.pending = null;
+  }
+
+  return [hook.memoizedState, hook.queue.dispatch];
 }
 
 /**
@@ -101,31 +170,24 @@ export function useReducer(reducer, initialState) {
  * @param {function(): (void|function(): void)} effect
  * @param {any[]} deps
  */
-export function useEffect(effect, deps) {
-  const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
-  const prevDeps = oldHook?.deps || [];
-  const hasChanged = oldHook
-    ? !deps || deps.some((d, i) => !Object.is(d, prevDeps[i]))
-    : true;
-  const hook = {
-    deps,
-    cleanup: oldHook?.cleanup,
-  };
+export function useEffect(create, deps) {
+  const hook = Cache.wipFiber.alternate
+    ? updateWorkInProgressHook()
+    : mountWorkInProgressHook();
+  const oldDeps = hook.deps;
+  const hasChanged =
+    !deps || !oldDeps || deps.some((d, i) => !Object.is(d, oldDeps[i]));
 
   if (hasChanged) {
-    // 이전 cleanup 호출
-    if (hook.cleanup) {
-      Cache.pendingEffects.push(() => hook.cleanup());
-    }
-    // 새로운 effect 추가
-    Cache.pendingEffects.push(() => {
-      const cleanupFn = effect();
-      hook.cleanup = typeof cleanupFn === "function" ? cleanupFn : undefined;
-    });
+    const newEffect = {
+      create: create,
+      destroy: hook.memoizedState ? hook.memoizedState.destroy : undefined, // 이전 effect의 destroy 함수를 가져옴
+      deps: deps,
+    };
+    hook.memoizedState = newEffect;
+    Cache.pendingEffects.push(newEffect);
   }
-
-  Cache.wipFiber.hooks[Cache.hookIndex] = hook;
-  Cache.hookIndex++;
+  hook.deps = deps;
 }
 
 /**
@@ -135,21 +197,18 @@ export function useEffect(effect, deps) {
  * @returns {*}
  */
 export function useMemo(factory, deps) {
-  const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
-  const hasChanged = oldHook
-    ? !deps || deps.some((d, i) => !Object.is(d, oldHook.deps[i]))
-    : true;
-  const hook = { value: null, deps };
+  const hook = Cache.wipFiber.alternate
+    ? updateWorkInProgressHook()
+    : mountWorkInProgressHook();
+  const oldDeps = hook.deps; // useMemo는 별도 deps 프로퍼티 사용
+  const hasChanged =
+    !deps || !oldDeps || deps.some((d, i) => !Object.is(d, oldDeps[i]));
 
   if (hasChanged) {
-    hook.value = factory();
-  } else {
-    hook.value = oldHook.value;
+    hook.memoizedState = factory();
+    hook.deps = deps;
   }
-
-  Cache.wipFiber.hooks[Cache.hookIndex] = hook;
-  Cache.hookIndex++;
-  return hook.value;
+  return hook.memoizedState;
 }
 
 /**
@@ -169,15 +228,13 @@ export function useCallback(callback, deps) {
  * @returns {{current: *}}
  */
 export function useRef(initialValue) {
-  debug("USE_REF")("useRef initial:", initialValue);
-  const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
-  // 첫 렌더링 시에는 ref 객체를 생성하고, 이후에는 기존 객체를 재사용합니다.
-  const hook = oldHook || { current: initialValue };
-
-  Cache.wipFiber.hooks[Cache.hookIndex] = hook;
-  debug("USE_REF")("hook stored at index", Cache.hookIndex, hook);
-  Cache.hookIndex++;
-  return hook;
+  const hook = Cache.wipFiber.alternate
+    ? updateWorkInProgressHook()
+    : mountWorkInProgressHook();
+  if (hook.memoizedState === null) {
+    hook.memoizedState = { current: initialValue };
+  }
+  return hook.memoizedState;
 }
 
 const REACT_CONTEXT_TYPE = Symbol.for("react.context");

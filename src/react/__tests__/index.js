@@ -98,7 +98,7 @@ const TestBed = () => {
         "div",
         { className: "card" },
         h("h2", {}, "useState & useCallback"),
-        h("p", {}, `Count: ${count} / ${now}`),
+        h("p", {}, `Count: ${count}`),
         h(
           ThemedButton,
           { onClick: () => setCount((c) => c + 1), className: "increment" },
@@ -109,7 +109,7 @@ const TestBed = () => {
       h(
         "div",
         { className: "card" },
-        h("h2", {}, "useRef & DOM Interaction"),
+        h("h2", {}, "useRef & DOM Interaction", ` / ${now}`),
         h(
           ThemedButton,
           { onClick: focusInput, className: "focus-input" },

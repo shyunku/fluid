@@ -34,10 +34,10 @@ const HomePage = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(Date.now());
-    }, 200);
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
-  console.log("Render");
+  console.log("Render Home");
 
   return h(
     "div",
@@ -57,6 +57,8 @@ const Massive = ({ massiveRef }) => {
       h("div", {}, `Item ${i}`)
     );
   }, []);
+
+  console.log("Render Massive", count);
 
   return h(
     "div",

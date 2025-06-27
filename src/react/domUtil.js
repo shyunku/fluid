@@ -1,4 +1,3 @@
-import { log } from "./logger.js";
 import { NodeTagType, EffectType, Fiber } from "./types.js";
 
 /**
@@ -95,4 +94,17 @@ export function insertOrAppendDom(node, before, parentDom) {
     insertOrAppendDom(child, before, parentDom);
     child = child.sibling;
   }
+}
+
+/**
+ * DOM 이벤트 타입을 React 이벤트 이름으로 변환합니다.
+ * @param {string} reactEventName
+ * @returns {string}
+ */
+export function getDomEventType(reactEventName) {
+  const eventType = reactEventName.slice(2).toLowerCase();
+  if (eventType === "change") {
+    return "input";
+  }
+  return eventType;
 }

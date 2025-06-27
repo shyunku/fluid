@@ -6,6 +6,7 @@ import { h } from "./h.js";
 import {
   findHostParentDom,
   findHostSiblingDom,
+  getDomEventType,
   insertOrAppendDom,
 } from "./domUtil.js";
 import { Cache } from "./cache.js";
@@ -92,6 +93,10 @@ function commitRoot() {
   commitWork(Cache.rootFiber.child);
 
   Cache.currentRoot = Cache.rootFiber;
+  if (Cache.currentRoot) {
+    Cache.currentRoot.alternate = null;
+  }
+
   Cache.rootFiber = null;
 
   runEffects();
@@ -109,7 +114,6 @@ function commitRoot() {
  */
 function beginWork(fiber) {
   debug("BEGIN_WORK")("beginWork:", fiber);
-  // console.log(fiber);
 
   switch (fiber.tag) {
     case NodeTagType.PROVIDER: {
@@ -120,7 +124,6 @@ function beginWork(fiber) {
         : context._defaultValue;
 
       if (changed(oldPropsValue, newPropsValue)) {
-        console.log(oldPropsValue, newPropsValue);
         fiber._contextHasChanged = true;
         Cache.forceRenderDescendantsCount++;
       }
@@ -154,15 +157,19 @@ function beginWork(fiber) {
       try {
         const alternate = fiber.alternate;
         let hasPendingUpdates = false;
+
         if (alternate) {
-          for (const hook of alternate.hooks) {
-            if (hook.queue && hook.queue.length > 0) {
+          let oldHook = alternate.memoizedState;
+          while (oldHook) {
+            if (oldHook.queue && oldHook.queue.pending) {
               hasPendingUpdates = true;
               break;
             }
+            oldHook = oldHook.next;
           }
         }
 
+        // Bailout 조건은 props 변경 없고, 업데이트도 없는 경우
         if (
           alternate &&
           !changed(fiber.props, alternate.props) &&
@@ -174,36 +181,26 @@ function beginWork(fiber) {
             fiber.componentName
           );
 
-          if (fiber.componentName === "HomePage") {
-            console.log(
-              "bailed out",
-              fiber.componentName,
-              fiber.props,
-              alternate.props
-            );
-          }
+          // Bailout 시, wip 파이버는 alternate의 훅 상태와 자식들을 그대로 이어받습니다.
+          fiber.memoizedState = alternate.memoizedState;
+
           let currentChild = alternate.child;
-          if (!currentChild) {
-            break; // No children to clone
-          }
+          if (currentChild) {
+            let newChild = currentChild.clone(); // 첫 자식만 복제
+            newChild.parent = fiber;
+            fiber.child = newChild;
 
-          let firstNewFiber = null;
-          let prevNewFiber = null;
-
-          while (currentChild) {
-            const newFiber = currentChild.clone();
-            newFiber.parent = fiber;
-
-            if (prevNewFiber === null) {
-              firstNewFiber = newFiber;
-            } else {
-              prevNewFiber.sibling = newFiber;
+            let prevSibling = newChild;
+            let nextCurrentChild = currentChild.sibling;
+            while (nextCurrentChild) {
+              let newSibling = nextCurrentChild.clone();
+              newSibling.parent = fiber;
+              prevSibling.sibling = newSibling;
+              prevSibling = newSibling;
+              nextCurrentChild = nextCurrentChild.sibling;
             }
-            prevNewFiber = newFiber;
-            currentChild = currentChild.sibling;
           }
 
-          fiber.child = firstNewFiber;
           break;
         }
 
@@ -359,30 +356,34 @@ function commitDelete(fiber) {
   debug("COMMIT_WORK")("Delete:", fiber);
 
   // remove children first
-  if (fiber.tag !== NodeTagType.HOST && fiber.tag !== NodeTagType.TEXT) {
-    let child = fiber.child;
-    while (child) {
-      commitDelete(child);
-      child = child.sibling;
-    }
+  let child = fiber.child;
+  while (child) {
+    commitDelete(child);
+    child = child.sibling;
   }
 
   // cleanup hooks
-  if (fiber.hooks) {
-    fiber.hooks.forEach((hook) => {
-      if (typeof hook.cleanup === "function") {
-        try {
-          hook.cleanup();
-        } catch (error) {
-          warn("COMMIT_WORK")(
-            "Error during cleanup in commitDelete:",
-            error,
-            "Fiber:",
-            fiber
-          );
+  if (fiber.memoizedState) {
+    let hook = fiber.memoizedState;
+    while (hook) {
+      // useEffect 훅의 cleanup 로직 (더 정교한 구현 필요)
+      if (hook.queue === undefined && hook.deps !== undefined) {
+        const effect = hook.memoizedState;
+        if (effect && typeof effect.destroy === "function") {
+          try {
+            effect.destroy();
+          } catch (e) {
+            warn("LIFECYCLE")(
+              "Error during cleanup in commitDelete:",
+              e,
+              "Fiber:",
+              fiber
+            );
+          }
         }
       }
-    });
+      hook = hook.next;
+    }
   }
 
   // clean ref
@@ -398,7 +399,7 @@ function commitDelete(fiber) {
         )
         .forEach((k) =>
           fiber.stateNode.removeEventListener(
-            k.slice(2).toLowerCase(),
+            getDomEventType(k),
             fiber.props[k]
           )
         );
@@ -432,7 +433,7 @@ function commitDelete(fiber) {
   fiber.sibling = null; // 형제 연결 해제
   fiber.stateNode = null; // DOM 노드 해제
   fiber.alternate = null; // 대체 노드 해제
-  fiber.hooks = null; // 훅 연결 해제
+  fiber.memoizedState = null; // 훅 연결 해제
   fiber.props = null; // 속성 연결 해제
 }
 
@@ -455,16 +456,9 @@ function applyProps(dom, props) {
     )
     .forEach((name) => {
       if (name.startsWith("on") && typeof props[name] === "function") {
-        const eventType = name.slice(2).toLowerCase();
-        debug("APPLY_PROPS")(`addEventListener: ${eventType}`);
-        switch (eventType) {
-          case "change":
-            dom.addEventListener("input", props[name]);
-            break;
-          default:
-            dom.addEventListener(eventType, props[name]);
-            break;
-        }
+        const domEventType = getDomEventType(name);
+        debug("APPLY_PROPS")(`addEventListener: ${domEventType}`);
+        dom.addEventListener(domEventType, props[name]);
       } else if (name === "className") {
         dom.className = props[name];
       } else {
@@ -504,7 +498,8 @@ function updateDom(dom, prevProps, nextProps) {
     .filter((name) => name.startsWith("on"))
     .forEach((name) => {
       if (!(name in nextProps) || prevProps[name] !== nextProps[name]) {
-        dom.removeEventListener(name.slice(2).toLowerCase(), prevProps[name]);
+        const domEventType = getDomEventType(name);
+        dom.removeEventListener(domEventType, prevProps[name]);
       }
     });
 
@@ -530,8 +525,8 @@ function updateDom(dom, prevProps, nextProps) {
       if (prevProps[name] === nextProps[name]) return;
 
       if (name.startsWith("on") && typeof nextProps[name] === "function") {
-        const eventType = name.slice(2).toLowerCase();
-        dom.addEventListener(eventType, nextProps[name]);
+        const domEventType = getDomEventType(name);
+        dom.addEventListener(domEventType, nextProps[name]);
       } else if (name === "className") {
         dom.className = nextProps[name];
       } else {

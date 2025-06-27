@@ -31,12 +31,20 @@ const TestBed = () => {
   const [count, setCount] = useState(0);
   const [items, setItems] = useState(["Apple", "Banana", "Cherry"]);
   const [text, setText] = useState("");
+  const [now, setNow] = useState(Date.now());
   const inputRef = useRef(null);
 
   useEffect(() => {
     document.title = `You have ${items.length} items`;
     console.log(`[useEffect] Items updated:`, items);
   }, [items]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 20);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleAddItem = useCallback(() => {
     if (text.trim()) {
@@ -90,7 +98,7 @@ const TestBed = () => {
         "div",
         { className: "card" },
         h("h2", {}, "useState & useCallback"),
-        h("p", {}, `Count: ${count}`),
+        h("p", {}, `Count: ${count} / ${now}`),
         h(
           ThemedButton,
           { onClick: () => setCount((c) => c + 1), className: "increment" },
@@ -158,6 +166,15 @@ const HomePage = () => h("div", {}, h("h1", {}, "Home Page"));
 const AboutPage = () => h("div", {}, h("h1", {}, "About Page"));
 
 const App = () => {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 20);
+    return () => clearInterval(interval);
+  }, []);
+
   return h(
     "div",
     {},
@@ -171,7 +188,9 @@ const App = () => {
         h("span", { style: "margin: 0 10px;" }, "|"),
         h(Link, { to: "/about" }, "About"),
         h("span", { style: "margin: 0 10px;" }, "|"),
-        h(Link, { to: "/testbed" }, "Test Bed")
+        h(Link, { to: "/testbed" }, "Test Bed"),
+        h("span", { style: "margin: 0 10px;" }, "|"),
+        h("span", {}, `Current Time: ${now}`)
       ),
       h("hr", {}),
       h(Route, { path: "/", component: HomePage }),

@@ -48,16 +48,12 @@ const SubItem = ({
   };
 
   useEffect(() => {
-    const j = 10;
-    for (let i = 0; i < j; i++) {
-      console.log(i);
-    }
-    // let t = setInterval(() => {
-    //   setDuration(Date.now() - startTime);
-    // }, 0);
-    // return () => {
-    //   clearInterval(t);
-    // };
+    let t = setInterval(() => {
+      setDuration(Date.now() - startTime);
+    }, 0);
+    return () => {
+      clearInterval(t);
+    };
   }, []);
 
   return (

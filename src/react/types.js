@@ -80,6 +80,11 @@ export class Fiber {
   clone() {
     const newFiber = new Fiber(this.type, this.props, this.key);
     newFiber.stateNode = this.stateNode;
+
+    if (this.alternate) {
+      this.alternate = null; // 이전 렌더 트리 참조를 해제합니다.
+    }
+
     newFiber.alternate = this;
     newFiber.hooks = this.hooks;
     return newFiber;

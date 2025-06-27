@@ -1,5 +1,5 @@
 import { debug } from "./logger.js";
-import { workLoop } from "./core.js";
+import { ensureWorkLoop, workLoop } from "./core.js";
 import { Cache } from "./cache.js";
 import { Fiber } from "./types.js";
 
@@ -24,20 +24,18 @@ function flushUpdates() {
     return; // 업데이트할 대상이 없음
   }
 
-  // `render` 함수와 유사하게 새로운 작업 루트를 설정합니다.
-  // currentRoot를 alternate로 설정하여 diff를 준비합니다.
   const newRootFiber = new Fiber(null, Cache.currentRoot.props, null);
   newRootFiber.stateNode = Cache.currentRoot.stateNode;
   newRootFiber.alternate = Cache.currentRoot;
+  newRootFiber.alternate.alternate = null;
 
   Cache.rootFiber = newRootFiber;
   Cache.deletions = [];
   Cache.nextUnitOfWork = Cache.rootFiber;
 
   window.rootFiber = Cache.rootFiber;
-
-  /* commitRoot 과정에서 nextUnitOfWork 가 생겼을 때 바로 workLoop 예약 */
-  window.requestIdleCallback(workLoop); // 다음 idle 프레임 확보
+  ensureWorkLoop();
+  // window.requestIdleCallback(workLoop);
 }
 
 /**
@@ -193,6 +191,7 @@ const REACT_PROVIDER_TYPE = Symbol.for("react.provider");
 export function createContext(defaultValue) {
   const context = {
     $$typeof: REACT_CONTEXT_TYPE,
+    _defaultValue: defaultValue,
     _currentValue: defaultValue,
     Provider: null,
   };

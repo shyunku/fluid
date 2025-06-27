@@ -1,5 +1,12 @@
 import { h } from "./h.js";
-import { createContext, useState, useEffect, useContext } from "./hooks.js";
+import {
+  createContext,
+  useState,
+  useEffect,
+  useContext,
+  useCallback,
+  useMemo,
+} from "./hooks.js";
 import { debug } from "./logger.js";
 
 const RouterContext = createContext(null);
@@ -12,10 +19,10 @@ export function Router({ children }) {
     window.location.hash ? window.location.hash.substring(1) : "/"
   );
 
-  const navigate = (to) => {
+  const navigate = useCallback((to) => {
     debug("ROUTER")("Navigating to hash:", to);
     window.location.hash = to;
-  };
+  }, []);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -30,7 +37,15 @@ export function Router({ children }) {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  return h(RouterContext.Provider, { value: { path, navigate } }, ...children);
+  const contextValue = useMemo(
+    () => ({
+      path,
+      navigate,
+    }),
+    [path, navigate]
+  );
+
+  return h(RouterContext.Provider, { value: contextValue }, ...children);
 }
 
 /**

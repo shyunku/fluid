@@ -114,21 +114,26 @@ function beginWork(fiber) {
   switch (fiber.tag) {
     case NodeTagType.PROVIDER: {
       const context = fiber.type._context;
-      const value = fiber.props.value;
+      const newPropsValue = fiber.props.value;
+      const oldPropsValue = fiber.alternate
+        ? fiber.alternate.props.value
+        : context._defaultValue;
 
-      const prevValue = context._currentValue;
-      if (changed(prevValue, value)) {
+      if (changed(oldPropsValue, newPropsValue)) {
+        console.log(oldPropsValue, newPropsValue);
         fiber._contextHasChanged = true;
         Cache.forceRenderDescendantsCount++;
       }
+
+      const prevValue = context._currentValue;
       Cache.contextStack.push(prevValue);
-      context._currentValue = value;
+      context._currentValue = newPropsValue;
 
       debug("CONTEXT")(
         "Provider found. Value pushed:",
-        value,
+        newPropsValue,
         "Previous:",
-        prevValue
+        oldPropsValue
       );
 
       reconcileChildren(fiber, fiber.props.children);
@@ -169,6 +174,14 @@ function beginWork(fiber) {
             fiber.componentName
           );
 
+          if (fiber.componentName === "HomePage") {
+            console.log(
+              "bailed out",
+              fiber.componentName,
+              fiber.props,
+              alternate.props
+            );
+          }
           let currentChild = alternate.child;
           if (!currentChild) {
             break; // No children to clone
@@ -193,8 +206,6 @@ function beginWork(fiber) {
           fiber.child = firstNewFiber;
           break;
         }
-
-        // console.log("update", fiber.componentName, fiber.props);
 
         debug("BEGIN_WORK")("Component render for", fiber.componentName);
         prepareToRender(fiber);
@@ -341,15 +352,59 @@ function commitUpdate(fiber) {
 /**
  * commitDelete: DOM에 삭제를 수행합니다.
  * @param {Fiber} fiber
- * @param {HTMLElement} explicitParentDom
  * @returns {void}
  */
-function commitDelete(fiber, explicitParentDom = null) {
+function commitDelete(fiber) {
+  if (!fiber) return;
   debug("COMMIT_WORK")("Delete:", fiber);
+
+  // remove children first
+  if (fiber.tag !== NodeTagType.HOST && fiber.tag !== NodeTagType.TEXT) {
+    let child = fiber.child;
+    while (child) {
+      commitDelete(child);
+      child = child.sibling;
+    }
+  }
+
+  // cleanup hooks
+  if (fiber.hooks) {
+    fiber.hooks.forEach((hook) => {
+      if (typeof hook.cleanup === "function") {
+        try {
+          hook.cleanup();
+        } catch (error) {
+          warn("COMMIT_WORK")(
+            "Error during cleanup in commitDelete:",
+            error,
+            "Fiber:",
+            fiber
+          );
+        }
+      }
+    });
+  }
+
+  // clean ref
+  if (fiber.props && fiber.props.ref && typeof fiber.props.ref === "object") {
+    fiber.props.ref.current = null;
+  }
+
   if (fiber.tag === NodeTagType.HOST || fiber.tag === NodeTagType.TEXT) {
     if (fiber.stateNode) {
-      const parentDom = explicitParentDom || findHostParentDom(fiber);
-      if (parentDom && fiber.stateNode.parentNode === parentDom) {
+      Object.keys(fiber.props || {})
+        .filter(
+          (k) => k.startsWith("on") && typeof fiber.props[k] === "function"
+        )
+        .forEach((k) =>
+          fiber.stateNode.removeEventListener(
+            k.slice(2).toLowerCase(),
+            fiber.props[k]
+          )
+        );
+
+      const parentDom = findHostParentDom(fiber);
+      if (parentDom && fiber.stateNode.parentNode) {
         parentDom.removeChild(fiber.stateNode);
       } else if (parentDom && !fiber.stateNode.parentNode) {
         debug("COMMIT_WORK")(
@@ -366,18 +421,19 @@ function commitDelete(fiber, explicitParentDom = null) {
         );
       }
     }
-  } else {
-    if (fiber.child) {
-      commitDelete(fiber.child, explicitParentDom || findHostParentDom(fiber));
-    }
   }
-  if (fiber.tag !== NodeTagType.HOST && fiber.tag !== NodeTagType.TEXT) {
-    let child = fiber.child;
-    while (child) {
-      commitDelete(child, findHostParentDom(child));
-      child = child.sibling;
-    }
+
+  if (fiber.alternate) {
+    fiber.alternate.alternate = null; // 대체 노드 해제
   }
+
+  fiber.parent = null; // 부모 연결 해제
+  fiber.child = null; // 자식 연결 해제
+  fiber.sibling = null; // 형제 연결 해제
+  fiber.stateNode = null; // DOM 노드 해제
+  fiber.alternate = null; // 대체 노드 해제
+  fiber.hooks = null; // 훅 연결 해제
+  fiber.props = null; // 속성 연결 해제
 }
 
 /**
@@ -603,7 +659,7 @@ function shouldYield(start, deadline) {
  * ensureWorkLoop: 작업 루프 보장
  * @returns {void}
  */
-function ensureWorkLoop() {
+export function ensureWorkLoop() {
   if (!Cache.workLoopScheduled) {
     Cache.workLoopScheduled = true;
     requestIdleCallback(workLoop);

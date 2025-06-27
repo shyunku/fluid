@@ -20,6 +20,10 @@ app.all("/dev/react", (req, res) => {
   res.sendFile(resolve(__dirname, "src/react/__tests__/index.html"));
 });
 
+app.all("/dev/react/test", (req, res) => {
+  res.sendFile(resolve(__dirname, "src/react/__tests__/test.html"));
+});
+
 app.all("/dev/jsx", (req, res) => {
   res.sendFile(resolve(__dirname, "src/jsx/__tests__/index.html"));
 });

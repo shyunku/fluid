@@ -27,14 +27,14 @@ import {
   Link,
 } from "../index.js";
 
-const HomePage = () => {
+const App = () => {
   const [now, setNow] = useState(Date.now());
   const massiveRef = useRef(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(Date.now());
-    }, 1000);
+    }, 20);
     return () => clearInterval(interval);
   }, []);
   console.log("Render Home");
@@ -49,7 +49,7 @@ const HomePage = () => {
   );
 };
 
-const MassiveCount = 10;
+const MassiveCount = 10000;
 const Massive = ({ massiveRef }) => {
   const [count, setCount] = useState(0);
   const items = useMemo(() => {
@@ -66,34 +66,10 @@ const Massive = ({ massiveRef }) => {
     h("h2", {}, "Massive Component"),
     h(
       "button",
-      { onClick: () => setCount(count + 1), ref: massiveRef },
+      { onClick: () => setCount((c) => c + 1), ref: massiveRef },
       `Increment Count: ${count}`
     ),
     h("div", {}, items)
-  );
-};
-
-const AboutPage = () => h("div", {}, h("h1", {}, "About Page"));
-
-const App = () => {
-  return h(
-    "div",
-    {},
-    h(
-      Router,
-      {},
-      h(
-        "nav",
-        {},
-        h(Link, { to: "/" }, "Home"),
-        h("span", { style: "margin: 0 10px;" }, "|"),
-        h(Link, { to: "/about" }, "About"),
-        h("span", { style: "margin: 0 10px;" }, "|")
-      ),
-      h("hr", {}),
-      h(Route, { path: "/", component: HomePage }),
-      h(Route, { path: "/about", component: AboutPage })
-    )
   );
 };
 

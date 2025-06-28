@@ -1,4 +1,4 @@
-/* MiniReact v3.2.10 */
+/* MiniReact v3.2.12 */
 var MiniReact = (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -229,7 +229,6 @@ var MiniReact = (() => {
     Cache.deletions = [];
     Cache.nextUnitOfWork = Cache.rootFiber;
     window.rootFiber = Cache.rootFiber;
-    window.currentRoot = Cache.currentRoot;
     ensureWorkLoop();
   }
   function scheduleUpdate() {
@@ -523,6 +522,7 @@ var MiniReact = (() => {
   function commitRoot() {
     debug("COMMIT_ROOT")("Commit Root \uC2DC\uC791");
     Cache.deletions.forEach(commitWork);
+    Cache.deletions = [];
     commitWork(Cache.rootFiber.child);
     Cache.currentRoot = Cache.rootFiber;
     if (Cache.currentRoot) {
@@ -705,13 +705,9 @@ var MiniReact = (() => {
     debug("COMMIT_WORK")("Delete:", fiber);
     let child = fiber.child;
     while (child) {
+      const nextSibling = child.sibling;
       commitDelete(child);
-      child = child.sibling;
-    }
-    let sibling = fiber.sibling;
-    while (sibling) {
-      commitDelete(sibling);
-      sibling = sibling.sibling;
+      child = nextSibling;
     }
     if (fiber.memoizedState) {
       let hook = fiber.memoizedState;

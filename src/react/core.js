@@ -1,5 +1,5 @@
 import { Fiber, NodeTagType, EffectType, VNode } from "./types.js";
-import { prepareToRender, runEffects } from "./hooks.js";
+import { prepareToRender, runEffects, scheduleUpdate } from "./hooks.js";
 import { debug, warn, error } from "./logger.js";
 import { changed } from "./util.js";
 import { h } from "./h.js";
@@ -90,12 +90,11 @@ function performUnitOfWork(fiber) {
 function commitRoot() {
   debug("COMMIT_ROOT")("Commit Root 시작");
   Cache.deletions.forEach(commitWork);
+  Cache.deletions = [];
   commitWork(Cache.rootFiber.child);
 
   Cache.currentRoot = Cache.rootFiber;
-  if (Cache.currentRoot) {
-    Cache.currentRoot.alternate = null;
-  }
+  Cache.currentRoot.alternate = null;
 
   Cache.rootFiber = null;
 
@@ -284,19 +283,33 @@ function completeWork(fiber) {
  * @returns {void}
  */
 function commitWork(fiber) {
-  if (!fiber) return;
+  while (fiber) {
+    switch (fiber.effectTag) {
+      case EffectType.PLACEMENT:
+        commitPlacement(fiber);
+        break;
+      case EffectType.UPDATE:
+        commitUpdate(fiber);
+        break;
+      case EffectType.DELETE:
+        commitDelete(fiber);
+        break;
+    }
 
-  if (fiber.effectTag === EffectType.PLACEMENT) {
-    commitPlacement(fiber);
-  } else if (fiber.effectTag === EffectType.UPDATE) {
-    commitUpdate(fiber);
-  } else if (fiber.effectTag === EffectType.DELETE) {
-    commitDelete(fiber);
-    return;
+    if (fiber.effectTag) {
+      // console.log(fiber, fiber.effectTag);
+    }
+
+    // 내려갈 자식이 있으면 먼저 내려간다 (DFS)
+    if (fiber.child) {
+      fiber = fiber.child;
+      continue;
+    }
+
+    // 더 이상 자식이 없으면 형제로, 형제도 없으면 부모의 형제로 올라감
+    while (fiber && !fiber.sibling) fiber = fiber.parent;
+    if (fiber) fiber = fiber.sibling;
   }
-
-  commitWork(fiber.child);
-  commitWork(fiber.sibling);
 }
 
 /**
@@ -554,6 +567,7 @@ function reconcileChildren(wipFiber, vnodes) {
 
   const keyCount = {};
   const explicitKeys = new Set();
+  const usedKeys = new Set();
   vnodes.forEach((vnode) => {
     const key = vnode?.props?.key;
     if (key !== null && key !== undefined) {
@@ -564,11 +578,11 @@ function reconcileChildren(wipFiber, vnodes) {
 
   // 명시적 key 중복 체크 및 경고 출력
   Object.entries(keyCount).forEach(([key, count]) => {
-    if (count > 1) {
-      warn("RECONCILE")(
-        `key "${key}"가 자식들 사이에서 중복되었습니다.`,
-        wipFiber
+    if (count > 1 && !wipFiber._didWarnDupKey) {
+      error("RECONCILE")(
+        `key "${key}"가 자식들 사이에서 중복되었습니다. key는 항상 고유해야합니다.`
       );
+      wipFiber._didWarnDupKey = true;
     }
   });
 
@@ -598,14 +612,27 @@ function reconcileChildren(wipFiber, vnodes) {
         key = `.${newIndex}`;
       }
     }
+
+    // ② 같은 key가 또 나오면 React처럼 “key 없는 노드”로 간주
+    if (usedKeys.has(key)) {
+      key = `.${newIndex}`; // 인덱스 기반 fallback
+    } else {
+      usedKeys.add(key);
+    }
+
     const sameFiber = existing[key];
     let newFiber = null;
 
     if (sameFiber && vnode.type === sameFiber.type) {
       newFiber = sameFiber.clone();
       newFiber.props = vnode.props; // 새로운 props 적용
-      newFiber.effectTag = EffectType.UPDATE;
+      // newFiber.effectTag = EffectType.UPDATE;
       newFiber.index = newIndex;
+
+      if (changed(sameFiber.props, vnode.props)) {
+        // ① 추가
+        newFiber.effectTag = EffectType.UPDATE; //    달 필요가 있을 때만
+      }
 
       if (sameFiber.index < lastPlacedIndex) {
         newFiber.effectTag = EffectType.PLACEMENT;
@@ -678,10 +705,15 @@ export function workLoop(deadline) {
   }
 
   if (Cache.nextUnitOfWork) {
-    ensureWorkLoop();
+    ensureWorkLoop(); // ↓ 아직 할일 남음
   } else if (Cache.rootFiber) {
+    // ↓ 커밋 단계
     commitRoot();
-    if (Cache.nextUnitOfWork) {
+    // 커밋이 끝났는데 대기 중인 업데이트가 있으면 다시 시작
+    if (Cache.updatePending) {
+      Cache.updatePending = false;
+      scheduleUpdate();
+    } else if (Cache.nextUnitOfWork) {
       ensureWorkLoop();
     }
   }

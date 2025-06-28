@@ -17,12 +17,10 @@ export function prepareToRender(fiber) {
  * 업데이트를 스케줄링하고 마이크로태스크로 실행합니다.
  */
 function flushUpdates() {
-  // 마이크로태스크에서 한 번만 실행
   Cache.scheduled = false;
 
-  if (!Cache.currentRoot) {
-    return; // 업데이트할 대상이 없음
-  }
+  // 👉 렌더링이 진행 중이면 건드리지 않는다.
+  if (Cache.nextUnitOfWork) return;
 
   const newRootFiber = new Fiber(null, Cache.currentRoot.props, null);
   newRootFiber.stateNode = Cache.currentRoot.stateNode;
@@ -34,19 +32,21 @@ function flushUpdates() {
   Cache.nextUnitOfWork = Cache.rootFiber;
 
   window.rootFiber = Cache.rootFiber;
-  window.currentRoot = Cache.currentRoot;
   ensureWorkLoop();
-  // window.requestIdleCallback(workLoop);
 }
 
 /**
  * 업데이트를 스케줄링합니다.
  */
 export function scheduleUpdate() {
-  if (Cache.scheduled) return; // 중복 예약 방지
+  if (Cache.nextUnitOfWork || Cache.rootFiber) {
+    Cache.updatePending = true;
+    return;
+  }
+  if (Cache.scheduled) return; // 중복 방지
   Cache.scheduled = true;
   debug("SCHEDULE_UPDATE")("update batched");
-  queueMicrotask(flushUpdates); // 같은 tick 안의 setState 를 배칭
+  queueMicrotask(flushUpdates);
 }
 
 /**

@@ -43,4 +43,7 @@ export class Cache {
 
   // 컨텍스트 변경에 따른 강제 리렌더링 카운터
   static forceRenderDescendantsCount = 0;
+
+  // 렌더링 중 업데이트가 발생했는지 여부
+  static updatePending = false;
 }

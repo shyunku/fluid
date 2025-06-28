@@ -1,4 +1,4 @@
-/* MiniReact v3.2.5 */
+/* MiniReact v3.2.13 */
 var MiniReact = (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -85,7 +85,7 @@ var MiniReact = (() => {
       this.props = props;
       this.key = key;
       this.stateNode = null;
-      this.hooks = [];
+      this.memoizedState = null;
       this.alternate = null;
       this.parent = null;
       this.child = null;
@@ -116,11 +116,8 @@ var MiniReact = (() => {
     clone() {
       const newFiber = new _Fiber(this.type, this.props, this.key);
       newFiber.stateNode = this.stateNode;
-      if (this.alternate) {
-        this.alternate = null;
-      }
       newFiber.alternate = this;
-      newFiber.hooks = this.hooks.map((hook) => ({ ...hook }));
+      this.alternate = null;
       return newFiber;
     }
   };
@@ -197,8 +194,10 @@ var MiniReact = (() => {
     static workLoopScheduled = false;
     // 현재 렌더링 중인 Fiber
     static wipFiber = null;
-    // hooks.js에서 사용될 변수들
-    static hookIndex = 0;
+    // alternate(current) 훅 리스트를 순회하는 포인터
+    static currentHook = null;
+    // wip 훅 리스트를 순회하는 포인터
+    static wipHook = null;
     // 렌더링
     static renderFunc = null;
     // 중복 예약 방지
@@ -209,19 +208,19 @@ var MiniReact = (() => {
     static contextStack = [];
     // 컨텍스트 변경에 따른 강제 리렌더링 카운터
     static forceRenderDescendantsCount = 0;
+    // 렌더링 중 업데이트가 발생했는지 여부
+    static updatePending = false;
   };
 
   // src/react/hooks.js
   function prepareToRender(fiber) {
     Cache.wipFiber = fiber;
-    Cache.wipFiber.hooks = [];
-    Cache.hookIndex = 0;
+    Cache.wipHook = null;
+    Cache.currentHook = null;
   }
   function flushUpdates() {
     Cache.scheduled = false;
-    if (!Cache.currentRoot) {
-      return;
-    }
+    if (Cache.nextUnitOfWork) return;
     const newRootFiber = new Fiber(null, Cache.currentRoot.props, null);
     newRootFiber.stateNode = Cache.currentRoot.stateNode;
     newRootFiber.alternate = Cache.currentRoot;
@@ -233,14 +232,67 @@ var MiniReact = (() => {
     ensureWorkLoop();
   }
   function scheduleUpdate() {
+    if (Cache.nextUnitOfWork || Cache.rootFiber) {
+      Cache.updatePending = true;
+      return;
+    }
     if (Cache.scheduled) return;
     Cache.scheduled = true;
     debug("SCHEDULE_UPDATE")("update batched");
     queueMicrotask(flushUpdates);
   }
   function runEffects() {
-    Cache.pendingEffects.forEach((fn) => fn());
+    Cache.pendingEffects.forEach((effect) => {
+      if (effect.destroy) {
+        effect.destroy();
+      }
+      const cleanupFn = effect.create();
+      if (typeof cleanupFn === "function") {
+        effect.destroy = cleanupFn;
+      }
+    });
     Cache.pendingEffects.length = 0;
+  }
+  function mountWorkInProgressHook() {
+    const hook = {
+      memoizedState: null,
+      queue: null,
+      next: null
+    };
+    if (Cache.wipHook === null) {
+      Cache.wipFiber.memoizedState = Cache.wipHook = hook;
+    } else {
+      Cache.wipHook = Cache.wipHook.next = hook;
+    }
+    return Cache.wipHook;
+  }
+  function updateWorkInProgressHook() {
+    const oldHook = Cache.currentHook ? Cache.currentHook.next : Cache.wipFiber.alternate.memoizedState;
+    Cache.currentHook = oldHook;
+    const newHook = {
+      memoizedState: oldHook.memoizedState,
+      queue: oldHook.queue,
+      next: null,
+      deps: oldHook.deps
+    };
+    if (Cache.wipHook === null) {
+      Cache.wipFiber.memoizedState = Cache.wipHook = newHook;
+    } else {
+      Cache.wipHook = Cache.wipHook.next = newHook;
+    }
+    return Cache.wipHook;
+  }
+  function dispatchAction(queue, action) {
+    const update = { action, next: null };
+    const pending = queue.pending;
+    if (pending === null) {
+      update.next = update;
+    } else {
+      update.next = pending.next;
+      pending.next = update;
+    }
+    queue.pending = update;
+    scheduleUpdate();
   }
   function useState(initialState) {
     return useReducer((state, action) => {
@@ -248,67 +300,60 @@ var MiniReact = (() => {
     }, initialState);
   }
   function useReducer(reducer, initialState) {
-    const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
-    const hook = oldHook || {
-      state: typeof initialState === "function" ? initialState() : initialState,
-      queue: []
-    };
-    hook.queue.forEach((action) => {
-      hook.state = reducer(hook.state, action);
-    });
-    hook.queue = [];
-    const dispatch = (action) => {
-      hook.queue.push(action);
-      scheduleUpdate();
-    };
-    Cache.wipFiber.hooks[Cache.hookIndex] = hook;
-    Cache.hookIndex++;
-    return [hook.state, dispatch];
-  }
-  function useEffect(effect, deps) {
-    const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
-    const prevDeps = oldHook?.deps || [];
-    const hasChanged = oldHook ? !deps || deps.some((d, i) => !Object.is(d, prevDeps[i])) : true;
-    const hook = {
-      deps,
-      cleanup: oldHook?.cleanup
-    };
-    if (hasChanged) {
-      if (hook.cleanup) {
-        Cache.pendingEffects.push(() => hook.cleanup());
-      }
-      Cache.pendingEffects.push(() => {
-        const cleanupFn = effect();
-        hook.cleanup = typeof cleanupFn === "function" ? cleanupFn : void 0;
-      });
+    const hook = Cache.wipFiber.alternate ? updateWorkInProgressHook() : mountWorkInProgressHook();
+    if (hook.queue === null) {
+      hook.memoizedState = typeof initialState === "function" ? initialState() : initialState;
+      hook.queue = { pending: null };
+      const dispatch = dispatchAction.bind(null, hook.queue);
+      hook.queue.dispatch = dispatch;
     }
-    Cache.wipFiber.hooks[Cache.hookIndex] = hook;
-    Cache.hookIndex++;
+    if (hook.queue.pending) {
+      let firstUpdate = hook.queue.pending.next;
+      let newState = hook.memoizedState;
+      do {
+        newState = reducer(newState, firstUpdate.action);
+        firstUpdate = firstUpdate.next;
+      } while (firstUpdate !== hook.queue.pending.next);
+      hook.memoizedState = newState;
+      hook.queue.pending = null;
+    }
+    return [hook.memoizedState, hook.queue.dispatch];
+  }
+  function useEffect(create, deps) {
+    const hook = Cache.wipFiber.alternate ? updateWorkInProgressHook() : mountWorkInProgressHook();
+    const oldDeps = hook.deps;
+    const hasChanged = !deps || !oldDeps || deps.some((d, i) => !Object.is(d, oldDeps[i]));
+    if (hasChanged) {
+      const newEffect = {
+        create,
+        destroy: hook.memoizedState ? hook.memoizedState.destroy : void 0,
+        // 이전 effect의 destroy 함수를 가져옴
+        deps
+      };
+      hook.memoizedState = newEffect;
+      Cache.pendingEffects.push(newEffect);
+    }
+    hook.deps = deps;
   }
   function useMemo(factory, deps) {
-    const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
-    const hasChanged = oldHook ? !deps || deps.some((d, i) => !Object.is(d, oldHook.deps[i])) : true;
-    const hook = { value: null, deps };
+    const hook = Cache.wipFiber.alternate ? updateWorkInProgressHook() : mountWorkInProgressHook();
+    const oldDeps = hook.deps;
+    const hasChanged = !deps || !oldDeps || deps.some((d, i) => !Object.is(d, oldDeps[i]));
     if (hasChanged) {
-      hook.value = factory();
-    } else {
-      hook.value = oldHook.value;
+      hook.memoizedState = factory();
+      hook.deps = deps;
     }
-    Cache.wipFiber.hooks[Cache.hookIndex] = hook;
-    Cache.hookIndex++;
-    return hook.value;
+    return hook.memoizedState;
   }
   function useCallback(callback, deps) {
     return useMemo(() => callback, deps);
   }
   function useRef(initialValue) {
-    debug("USE_REF")("useRef initial:", initialValue);
-    const oldHook = Cache.wipFiber.alternate?.hooks[Cache.hookIndex];
-    const hook = oldHook || { current: initialValue };
-    Cache.wipFiber.hooks[Cache.hookIndex] = hook;
-    debug("USE_REF")("hook stored at index", Cache.hookIndex, hook);
-    Cache.hookIndex++;
-    return hook;
+    const hook = Cache.wipFiber.alternate ? updateWorkInProgressHook() : mountWorkInProgressHook();
+    if (hook.memoizedState === null) {
+      hook.memoizedState = { current: initialValue };
+    }
+    return hook.memoizedState;
   }
   var REACT_CONTEXT_TYPE = Symbol.for("react.context");
   var REACT_PROVIDER_TYPE = Symbol.for("react.provider");
@@ -345,10 +390,19 @@ var MiniReact = (() => {
     return keysA.some((key) => changed(a[key], b[key]));
   }
   function flatten(arr) {
-    if (!Array.isArray(arr)) return arr;
-    return arr.flat().reduce((acc, cur) => {
-      return acc.concat(flatten(cur));
-    }, []);
+    const out = [];
+    const stack = [arr];
+    while (stack.length) {
+      const value = stack.pop();
+      if (Array.isArray(value)) {
+        for (let i = value.length - 1; i >= 0; i--) {
+          stack.push(value[i]);
+        }
+      } else {
+        out.push(value);
+      }
+    }
+    return out;
   }
 
   // src/react/h.js
@@ -417,6 +471,13 @@ var MiniReact = (() => {
       child = child.sibling;
     }
   }
+  function getDomEventType(reactEventName) {
+    const eventType = reactEventName.slice(2).toLowerCase();
+    if (eventType === "change") {
+      return "input";
+    }
+    return eventType;
+  }
 
   // src/react/core.js
   var requestIdleCallback = window.requestIdleCallback || function(cb) {
@@ -458,8 +519,10 @@ var MiniReact = (() => {
   function commitRoot() {
     debug("COMMIT_ROOT")("Commit Root \uC2DC\uC791");
     Cache.deletions.forEach(commitWork);
+    Cache.deletions = [];
     commitWork(Cache.rootFiber.child);
     Cache.currentRoot = Cache.rootFiber;
+    Cache.currentRoot.alternate = null;
     Cache.rootFiber = null;
     runEffects();
     debug("COMMIT_ROOT")("Commit \uC644\uB8CC, currentRoot set to:", Cache.currentRoot);
@@ -472,7 +535,6 @@ var MiniReact = (() => {
         const newPropsValue = fiber.props.value;
         const oldPropsValue = fiber.alternate ? fiber.alternate.props.value : context._defaultValue;
         if (changed(oldPropsValue, newPropsValue)) {
-          console.log(oldPropsValue, newPropsValue);
           fiber._contextHasChanged = true;
           Cache.forceRenderDescendantsCount++;
         }
@@ -504,11 +566,13 @@ var MiniReact = (() => {
           const alternate = fiber.alternate;
           let hasPendingUpdates = false;
           if (alternate) {
-            for (const hook of alternate.hooks) {
-              if (hook.queue && hook.queue.length > 0) {
+            let oldHook = alternate.memoizedState;
+            while (oldHook) {
+              if (oldHook.queue && oldHook.queue.pending) {
                 hasPendingUpdates = true;
                 break;
               }
+              oldHook = oldHook.next;
             }
           }
           if (alternate && !changed(fiber.props, alternate.props) && !hasPendingUpdates && Cache.forceRenderDescendantsCount === 0) {
@@ -516,32 +580,22 @@ var MiniReact = (() => {
               "Bailout: Cloning children for",
               fiber.componentName
             );
-            if (fiber.componentName === "HomePage") {
-              console.log(
-                "bailed out",
-                fiber.componentName,
-                fiber.props,
-                alternate.props
-              );
-            }
+            fiber.memoizedState = alternate.memoizedState;
             let currentChild = alternate.child;
-            if (!currentChild) {
-              break;
-            }
-            let firstNewFiber = null;
-            let prevNewFiber = null;
-            while (currentChild) {
-              const newFiber = currentChild.clone();
-              newFiber.parent = fiber;
-              if (prevNewFiber === null) {
-                firstNewFiber = newFiber;
-              } else {
-                prevNewFiber.sibling = newFiber;
+            if (currentChild) {
+              let newChild = currentChild.clone();
+              newChild.parent = fiber;
+              fiber.child = newChild;
+              let prevSibling = newChild;
+              let nextCurrentChild = currentChild.sibling;
+              while (nextCurrentChild) {
+                let newSibling = nextCurrentChild.clone();
+                newSibling.parent = fiber;
+                prevSibling.sibling = newSibling;
+                prevSibling = newSibling;
+                nextCurrentChild = nextCurrentChild.sibling;
               }
-              prevNewFiber = newFiber;
-              currentChild = currentChild.sibling;
             }
-            fiber.child = firstNewFiber;
             break;
           }
           debug("BEGIN_WORK")("Component render for", fiber.componentName);
@@ -603,17 +657,27 @@ var MiniReact = (() => {
     }
   }
   function commitWork(fiber) {
-    if (!fiber) return;
-    if (fiber.effectTag === EffectType.PLACEMENT) {
-      commitPlacement(fiber);
-    } else if (fiber.effectTag === EffectType.UPDATE) {
-      commitUpdate(fiber);
-    } else if (fiber.effectTag === EffectType.DELETE) {
-      commitDelete(fiber);
-      return;
+    while (fiber) {
+      switch (fiber.effectTag) {
+        case EffectType.PLACEMENT:
+          commitPlacement(fiber);
+          break;
+        case EffectType.UPDATE:
+          commitUpdate(fiber);
+          break;
+        case EffectType.DELETE:
+          commitDelete(fiber);
+          break;
+      }
+      if (fiber.effectTag) {
+      }
+      if (fiber.child) {
+        fiber = fiber.child;
+        continue;
+      }
+      while (fiber && !fiber.sibling) fiber = fiber.parent;
+      if (fiber) fiber = fiber.sibling;
     }
-    commitWork(fiber.child);
-    commitWork(fiber.sibling);
   }
   function commitPlacement(fiber) {
     const parentDom = findHostParentDom(fiber);
@@ -644,28 +708,32 @@ var MiniReact = (() => {
   function commitDelete(fiber) {
     if (!fiber) return;
     debug("COMMIT_WORK")("Delete:", fiber);
-    if (fiber.tag !== NodeTagType.HOST && fiber.tag !== NodeTagType.TEXT) {
-      let child = fiber.child;
-      while (child) {
-        commitDelete(child);
-        child = child.sibling;
-      }
+    let child = fiber.child;
+    while (child) {
+      const nextSibling = child.sibling;
+      commitDelete(child);
+      child = nextSibling;
     }
-    if (fiber.hooks) {
-      fiber.hooks.forEach((hook) => {
-        if (typeof hook.cleanup === "function") {
-          try {
-            hook.cleanup();
-          } catch (error2) {
-            warn("COMMIT_WORK")(
-              "Error during cleanup in commitDelete:",
-              error2,
-              "Fiber:",
-              fiber
-            );
+    if (fiber.memoizedState) {
+      let hook = fiber.memoizedState;
+      while (hook) {
+        if (hook.queue === void 0 && hook.deps !== void 0) {
+          const effect = hook.memoizedState;
+          if (effect && typeof effect.destroy === "function") {
+            try {
+              effect.destroy();
+            } catch (e) {
+              warn("LIFECYCLE")(
+                "Error during cleanup in commitDelete:",
+                e,
+                "Fiber:",
+                fiber
+              );
+            }
           }
         }
-      });
+        hook = hook.next;
+      }
     }
     if (fiber.props && fiber.props.ref && typeof fiber.props.ref === "object") {
       fiber.props.ref.current = null;
@@ -676,7 +744,7 @@ var MiniReact = (() => {
           (k) => k.startsWith("on") && typeof fiber.props[k] === "function"
         ).forEach(
           (k) => fiber.stateNode.removeEventListener(
-            k.slice(2).toLowerCase(),
+            getDomEventType(k),
             fiber.props[k]
           )
         );
@@ -707,7 +775,7 @@ var MiniReact = (() => {
     fiber.sibling = null;
     fiber.stateNode = null;
     fiber.alternate = null;
-    fiber.hooks = null;
+    fiber.memoizedState = null;
     fiber.props = null;
   }
   function applyProps(dom, props) {
@@ -719,16 +787,9 @@ var MiniReact = (() => {
       (k) => k !== "children" && k !== "key" && k !== "nodeValue" && k !== "ref"
     ).forEach((name) => {
       if (name.startsWith("on") && typeof props[name] === "function") {
-        const eventType = name.slice(2).toLowerCase();
-        debug("APPLY_PROPS")(`addEventListener: ${eventType}`);
-        switch (eventType) {
-          case "change":
-            dom.addEventListener("input", props[name]);
-            break;
-          default:
-            dom.addEventListener(eventType, props[name]);
-            break;
-        }
+        const domEventType = getDomEventType(name);
+        debug("APPLY_PROPS")(`addEventListener: ${domEventType}`);
+        dom.addEventListener(domEventType, props[name]);
       } else if (name === "className") {
         dom.className = props[name];
       } else {
@@ -750,7 +811,8 @@ var MiniReact = (() => {
   function updateDom(dom, prevProps, nextProps) {
     Object.keys(prevProps).filter((name) => name.startsWith("on")).forEach((name) => {
       if (!(name in nextProps) || prevProps[name] !== nextProps[name]) {
-        dom.removeEventListener(name.slice(2).toLowerCase(), prevProps[name]);
+        const domEventType = getDomEventType(name);
+        dom.removeEventListener(domEventType, prevProps[name]);
       }
     });
     if (prevProps.ref && prevProps.ref !== nextProps.ref) {
@@ -767,8 +829,8 @@ var MiniReact = (() => {
     Object.keys(nextProps).filter((name) => name !== "children" && name !== "ref").forEach((name) => {
       if (prevProps[name] === nextProps[name]) return;
       if (name.startsWith("on") && typeof nextProps[name] === "function") {
-        const eventType = name.slice(2).toLowerCase();
-        dom.addEventListener(eventType, nextProps[name]);
+        const domEventType = getDomEventType(name);
+        dom.addEventListener(domEventType, nextProps[name]);
       } else if (name === "className") {
         dom.className = nextProps[name];
       } else {
@@ -783,6 +845,7 @@ var MiniReact = (() => {
     let index = 0;
     const keyCount = {};
     const explicitKeys = /* @__PURE__ */ new Set();
+    const usedKeys = /* @__PURE__ */ new Set();
     vnodes.forEach((vnode) => {
       const key = vnode?.props?.key;
       if (key !== null && key !== void 0) {
@@ -791,11 +854,11 @@ var MiniReact = (() => {
       }
     });
     Object.entries(keyCount).forEach(([key, count]) => {
-      if (count > 1) {
-        warn("RECONCILE")(
-          `key "${key}"\uAC00 \uC790\uC2DD\uB4E4 \uC0AC\uC774\uC5D0\uC11C \uC911\uBCF5\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`,
-          wipFiber
+      if (count > 1 && !wipFiber._didWarnDupKey) {
+        error("RECONCILE")(
+          `key "${key}"\uAC00 \uC790\uC2DD\uB4E4 \uC0AC\uC774\uC5D0\uC11C \uC911\uBCF5\uB418\uC5C8\uC2B5\uB2C8\uB2E4. key\uB294 \uD56D\uC0C1 \uACE0\uC720\uD574\uC57C\uD569\uB2C8\uB2E4.`
         );
+        wipFiber._didWarnDupKey = true;
       }
     });
     while (oldFiber) {
@@ -822,13 +885,20 @@ var MiniReact = (() => {
           key = `.${newIndex}`;
         }
       }
+      if (usedKeys.has(key)) {
+        key = `.${newIndex}`;
+      } else {
+        usedKeys.add(key);
+      }
       const sameFiber = existing[key];
       let newFiber = null;
       if (sameFiber && vnode.type === sameFiber.type) {
         newFiber = sameFiber.clone();
         newFiber.props = vnode.props;
-        newFiber.effectTag = EffectType.UPDATE;
         newFiber.index = newIndex;
+        if (changed(sameFiber.props, vnode.props)) {
+          newFiber.effectTag = EffectType.UPDATE;
+        }
         if (sameFiber.index < lastPlacedIndex) {
           newFiber.effectTag = EffectType.PLACEMENT;
         } else {
@@ -881,7 +951,10 @@ var MiniReact = (() => {
       ensureWorkLoop();
     } else if (Cache.rootFiber) {
       commitRoot();
-      if (Cache.nextUnitOfWork) {
+      if (Cache.updatePending) {
+        Cache.updatePending = false;
+        scheduleUpdate();
+      } else if (Cache.nextUnitOfWork) {
         ensureWorkLoop();
       }
     }

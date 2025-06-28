@@ -12,6 +12,8 @@ const SubItem = ({
 }) => {
   const [items, setItems] = useState([]);
   const [input, setInput] = useState("");
+  const [input2, setInput2] = useState("");
+  const [items2, setItems2] = useState([]);
   const [duration, setDuration] = useState(0);
   const thisId = useMemo(
     () => `${parentId !== null ? `${parentId}.` : ""}${id}`,
@@ -27,6 +29,12 @@ const SubItem = ({
       clearInterval(t);
     };
   }, []);
+
+  const addItem2 = () => {
+    if (!input2.trim()) return;
+    setItems2((prevItems) => [...prevItems, { text: input2 }]);
+    setInput2("");
+  };
 
   const onItemAdd = () => {
     const itemMaxId = Math.max(...items.map((item) => item.id), 0) || 0;
@@ -94,6 +102,19 @@ const SubItem = ({
             onItemMove={onItemMove}
             onItemRemove={onItemRemove}
           />
+        ))}
+      </div>
+      <input
+        type="text"
+        onChange={(e) => setInput2(e.target.value)}
+        value={input2}
+      />
+      <button onClick={addItem2}>add</button>
+      <div className="items">
+        {items2.map((item, ind) => (
+          <div key={item.text} className="item2">
+            {item.text}
+          </div>
         ))}
       </div>
     </div>

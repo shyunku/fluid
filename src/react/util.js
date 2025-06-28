@@ -95,18 +95,29 @@ export function removeFromArray(arr, value) {
 }
 
 /**
- * 배열을 재귀적으로 평탄화합니다.
+ * 재귀 없이, 원래 순서를 그대로 유지해 평탄화합니다.
  * @param {any[]} arr
  * @returns {any[]}
  */
 export function flatten(arr) {
-  if (!Array.isArray(arr)) return arr;
-  return arr.flat().reduce((acc, cur) => {
-    return acc.concat(flatten(cur));
-  }, []);
+  const out = [];
+  const stack = [arr];
+
+  while (stack.length) {
+    const value = stack.pop();
+
+    if (Array.isArray(value)) {
+      for (let i = value.length - 1; i >= 0; i--) {
+        stack.push(value[i]);
+      }
+    } else {
+      out.push(value);
+    }
+  }
+  return out;
 }
 
-export function getAllInfiniteChainFiber(fiber, depth = 0, zDepth = 0) {
+function getAllInfiniteChainFiber(fiber, depth = 0, zDepth = 0) {
   if (!fiber) return;
   if (fiber.alternate) {
     if (zDepth > 15) {
@@ -121,5 +132,3 @@ export function getAllInfiniteChainFiber(fiber, depth = 0, zDepth = 0) {
   if (fiber.child) getAllInfiniteChainFiber(fiber.child, depth + 1, zDepth);
   if (fiber.sibling) getAllInfiniteChainFiber(fiber.sibling, depth, zDepth);
 }
-
-window.getAllInfiniteChainFiber = getAllInfiniteChainFiber;

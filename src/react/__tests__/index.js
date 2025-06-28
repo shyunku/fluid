@@ -15,16 +15,43 @@ import {
 // 1. Context 생성
 const ThemeContext = createContext("light");
 
-// 2. Context를 사용하는 자식 컴포넌트
-const ThemedButton = ({ children, ...props }) => {
-  const theme = useContext(ThemeContext);
-  const style =
-    theme === "dark"
-      ? "background-color: #333; color: #EEE;"
-      : "background-color: #EEE; color: #333;";
+const App = () => {
+  const [now, setNow] = useState(Date.now());
 
-  return h("button", { ...props, style }, children);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 20);
+    return () => clearInterval(interval);
+  }, []);
+
+  return h(
+    "div",
+    {},
+    h(
+      Router,
+      {},
+      h(
+        "nav",
+        {},
+        h(Link, { to: "/" }, "Home"),
+        h("span", { style: "margin: 0 10px;" }, "|"),
+        h(Link, { to: "/about" }, "About"),
+        h("span", { style: "margin: 0 10px;" }, "|"),
+        h(Link, { to: "/testbed" }, "Test Bed"),
+        h("span", { style: "margin: 0 10px;" }, "|"),
+        h("span", {}, `Current Time: ${now}`)
+      ),
+      h("hr", {}),
+      h(Route, { path: "/", component: HomePage }),
+      h(Route, { path: "/about", component: AboutPage }),
+      h(Route, { path: "/testbed", component: TestBed })
+    )
+  );
 };
+
+const HomePage = () => h("div", {}, h("h1", {}, "Home Page"));
+const AboutPage = () => h("div", {}, h("h1", {}, "About Page"));
 
 const TestBed = () => {
   const [theme, setTheme] = useState("light");
@@ -162,42 +189,14 @@ const TestBed = () => {
   );
 };
 
-const HomePage = () => h("div", {}, h("h1", {}, "Home Page"));
-const AboutPage = () => h("div", {}, h("h1", {}, "About Page"));
+const ThemedButton = ({ children, ...props }) => {
+  const theme = useContext(ThemeContext);
+  const style =
+    theme === "dark"
+      ? "background-color: #333; color: #EEE;"
+      : "background-color: #EEE; color: #333;";
 
-const App = () => {
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(Date.now());
-    }, 20);
-    return () => clearInterval(interval);
-  }, []);
-
-  return h(
-    "div",
-    {},
-    h(
-      Router,
-      {},
-      h(
-        "nav",
-        {},
-        h(Link, { to: "/" }, "Home"),
-        h("span", { style: "margin: 0 10px;" }, "|"),
-        h(Link, { to: "/about" }, "About"),
-        h("span", { style: "margin: 0 10px;" }, "|"),
-        h(Link, { to: "/testbed" }, "Test Bed"),
-        h("span", { style: "margin: 0 10px;" }, "|"),
-        h("span", {}, `Current Time: ${now}`)
-      ),
-      h("hr", {}),
-      h(Route, { path: "/", component: HomePage }),
-      h(Route, { path: "/about", component: AboutPage }),
-      h(Route, { path: "/testbed", component: TestBed })
-    )
-  );
+  return h("button", { ...props, style }, children);
 };
 
 render(App, document.getElementById("root"));

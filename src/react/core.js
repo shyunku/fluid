@@ -362,6 +362,13 @@ function commitDelete(fiber) {
     child = child.sibling;
   }
 
+  // remove siblings
+  let sibling = fiber.sibling;
+  while (sibling) {
+    commitDelete(sibling);
+    sibling = sibling.sibling;
+  }
+
   // cleanup hooks
   if (fiber.memoizedState) {
     let hook = fiber.memoizedState;

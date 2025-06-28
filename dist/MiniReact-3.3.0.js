@@ -1,4 +1,4 @@
-/* MiniReact v3.2.12 */
+/* MiniReact v3.3.0 */
 var MiniReact = (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -208,6 +208,8 @@ var MiniReact = (() => {
     static contextStack = [];
     // 컨텍스트 변경에 따른 강제 리렌더링 카운터
     static forceRenderDescendantsCount = 0;
+    // 렌더링 중 업데이트가 발생했는지 여부
+    static updatePending = false;
   };
 
   // src/react/hooks.js
@@ -218,9 +220,7 @@ var MiniReact = (() => {
   }
   function flushUpdates() {
     Cache.scheduled = false;
-    if (!Cache.currentRoot) {
-      return;
-    }
+    if (Cache.nextUnitOfWork) return;
     const newRootFiber = new Fiber(null, Cache.currentRoot.props, null);
     newRootFiber.stateNode = Cache.currentRoot.stateNode;
     newRootFiber.alternate = Cache.currentRoot;
@@ -232,6 +232,10 @@ var MiniReact = (() => {
     ensureWorkLoop();
   }
   function scheduleUpdate() {
+    if (Cache.nextUnitOfWork || Cache.rootFiber) {
+      Cache.updatePending = true;
+      return;
+    }
     if (Cache.scheduled) return;
     Cache.scheduled = true;
     debug("SCHEDULE_UPDATE")("update batched");
@@ -386,27 +390,20 @@ var MiniReact = (() => {
     return keysA.some((key) => changed(a[key], b[key]));
   }
   function flatten(arr) {
-    if (!Array.isArray(arr)) return arr;
-    return arr.flat().reduce((acc, cur) => {
-      return acc.concat(flatten(cur));
-    }, []);
-  }
-  function getAllInfiniteChainFiber(fiber, depth = 0, zDepth = 0) {
-    if (!fiber) return;
-    if (fiber.alternate) {
-      if (zDepth > 15) {
-        console.warn(
-          `Infinite loop detected at depth ${zDepth} with fiber:`,
-          fiber
-        );
-        throw new Error();
+    const out = [];
+    const stack = [arr];
+    while (stack.length) {
+      const value = stack.pop();
+      if (Array.isArray(value)) {
+        for (let i = value.length - 1; i >= 0; i--) {
+          stack.push(value[i]);
+        }
+      } else {
+        out.push(value);
       }
-      getAllInfiniteChainFiber(fiber.alternate, depth, zDepth + 1);
     }
-    if (fiber.child) getAllInfiniteChainFiber(fiber.child, depth + 1, zDepth);
-    if (fiber.sibling) getAllInfiniteChainFiber(fiber.sibling, depth, zDepth);
+    return out;
   }
-  window.getAllInfiniteChainFiber = getAllInfiniteChainFiber;
 
   // src/react/h.js
   function h(type, props = {}, ...children) {
@@ -525,9 +522,7 @@ var MiniReact = (() => {
     Cache.deletions = [];
     commitWork(Cache.rootFiber.child);
     Cache.currentRoot = Cache.rootFiber;
-    if (Cache.currentRoot) {
-      Cache.currentRoot.alternate = null;
-    }
+    Cache.currentRoot.alternate = null;
     Cache.rootFiber = null;
     runEffects();
     debug("COMMIT_ROOT")("Commit \uC644\uB8CC, currentRoot set to:", Cache.currentRoot);
@@ -662,17 +657,27 @@ var MiniReact = (() => {
     }
   }
   function commitWork(fiber) {
-    if (!fiber) return;
-    if (fiber.effectTag === EffectType.PLACEMENT) {
-      commitPlacement(fiber);
-    } else if (fiber.effectTag === EffectType.UPDATE) {
-      commitUpdate(fiber);
-    } else if (fiber.effectTag === EffectType.DELETE) {
-      commitDelete(fiber);
-      return;
+    while (fiber) {
+      switch (fiber.effectTag) {
+        case EffectType.PLACEMENT:
+          commitPlacement(fiber);
+          break;
+        case EffectType.UPDATE:
+          commitUpdate(fiber);
+          break;
+        case EffectType.DELETE:
+          commitDelete(fiber);
+          break;
+      }
+      if (fiber.effectTag) {
+      }
+      if (fiber.child) {
+        fiber = fiber.child;
+        continue;
+      }
+      while (fiber && !fiber.sibling) fiber = fiber.parent;
+      if (fiber) fiber = fiber.sibling;
     }
-    commitWork(fiber.child);
-    commitWork(fiber.sibling);
   }
   function commitPlacement(fiber) {
     const parentDom = findHostParentDom(fiber);
@@ -840,6 +845,7 @@ var MiniReact = (() => {
     let index = 0;
     const keyCount = {};
     const explicitKeys = /* @__PURE__ */ new Set();
+    const usedKeys = /* @__PURE__ */ new Set();
     vnodes.forEach((vnode) => {
       const key = vnode?.props?.key;
       if (key !== null && key !== void 0) {
@@ -848,11 +854,11 @@ var MiniReact = (() => {
       }
     });
     Object.entries(keyCount).forEach(([key, count]) => {
-      if (count > 1) {
-        warn("RECONCILE")(
-          `key "${key}"\uAC00 \uC790\uC2DD\uB4E4 \uC0AC\uC774\uC5D0\uC11C \uC911\uBCF5\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`,
-          wipFiber
+      if (count > 1 && !wipFiber._didWarnDupKey) {
+        error("RECONCILE")(
+          `key "${key}"\uAC00 \uC790\uC2DD\uB4E4 \uC0AC\uC774\uC5D0\uC11C \uC911\uBCF5\uB418\uC5C8\uC2B5\uB2C8\uB2E4. key\uB294 \uD56D\uC0C1 \uACE0\uC720\uD574\uC57C\uD569\uB2C8\uB2E4.`
         );
+        wipFiber._didWarnDupKey = true;
       }
     });
     while (oldFiber) {
@@ -879,13 +885,20 @@ var MiniReact = (() => {
           key = `.${newIndex}`;
         }
       }
+      if (usedKeys.has(key)) {
+        key = `.${newIndex}`;
+      } else {
+        usedKeys.add(key);
+      }
       const sameFiber = existing[key];
       let newFiber = null;
       if (sameFiber && vnode.type === sameFiber.type) {
         newFiber = sameFiber.clone();
         newFiber.props = vnode.props;
-        newFiber.effectTag = EffectType.UPDATE;
         newFiber.index = newIndex;
+        if (changed(sameFiber.props, vnode.props)) {
+          newFiber.effectTag = EffectType.UPDATE;
+        }
         if (sameFiber.index < lastPlacedIndex) {
           newFiber.effectTag = EffectType.PLACEMENT;
         } else {
@@ -938,7 +951,10 @@ var MiniReact = (() => {
       ensureWorkLoop();
     } else if (Cache.rootFiber) {
       commitRoot();
-      if (Cache.nextUnitOfWork) {
+      if (Cache.updatePending) {
+        Cache.updatePending = false;
+        scheduleUpdate();
+      } else if (Cache.nextUnitOfWork) {
         ensureWorkLoop();
       }
     }

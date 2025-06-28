@@ -358,15 +358,9 @@ function commitDelete(fiber) {
   // remove children first
   let child = fiber.child;
   while (child) {
+    const nextSibling = child.sibling;
     commitDelete(child);
-    child = child.sibling;
-  }
-
-  // remove siblings
-  let sibling = fiber.sibling;
-  while (sibling) {
-    commitDelete(sibling);
-    sibling = sibling.sibling;
+    child = nextSibling;
   }
 
   // cleanup hooks
@@ -434,6 +428,8 @@ function commitDelete(fiber) {
   if (fiber.alternate) {
     fiber.alternate.alternate = null; // 대체 노드 해제
   }
+
+  // console.log(`Unmounting fiber:`, fiber);
 
   fiber.parent = null; // 부모 연결 해제
   fiber.child = null; // 자식 연결 해제

@@ -2,8 +2,8 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <title>MiniJSX Test</title>
-    <script src="../../dist/MiniReact-3.1.0.js"></script>
+    <title>Fluid Test</title>
+    <script src="../../dist/Fluid-3.3.0.js"></script>
     <style>
       html {
         font-size: 12px;
@@ -37,12 +37,12 @@
         animation: fade 0.5s ease;
       }
     </style>
-    <script src="../../dist/MiniJSX-2.0.0.js"></script>
+    <script src="../../dist/Jsxify-2.2.0.js"></script>
   </head>
   <body>
     <div id="root"></div>
     <script type="text/jsx">
-      const { useState, useEffect, useMemo, render, h } = MiniReact;
+      const { useState, useEffect, useMemo, render, h } = Fluid;
 
       const App = () => {
         return (
@@ -112,7 +112,9 @@
                 <button onClick={(e) => onParentItemMove(index, 1)}>down</button>
               )}
               <input onChange={(e) => setInput(e.target.value)} value={input} />
-              {input}/{duration}ms, Test String: here         and here
+              {input}/{duration}ms, Test Space String: here and   {thisId}   here
+              {/*sdf*/}
+              <div> Hello World </div>
             </div>
             <div className="item-list">
               {items.map((item, iind) => (

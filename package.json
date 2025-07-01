@@ -1,9 +1,9 @@
 {
   "name": "fluid",
-  "version": "1.1.5",
+  "version": "1.2.0",
   "config": {
     "core": "3.3.0",
-    "jsxVersion": "2.1.0"
+    "jsxVersion": "2.2.0"
   },
   "main": "index.js",
   "scripts": {
@@ -13,8 +13,8 @@
     "test:e2e:jsx": "echo \"JSX E2E tests not implemented yet\" && exit 0",
     "test:e2e:report": "playwright show-report",
     "start": "node index.js",
-    "build": "esbuild src/react/index.js --format=iife --global-name=MiniReact --bundle --outfile=dist/MiniReact-%npm_package_config_core%.js --banner:js=\"/* MiniReact v%npm_package_config_core% */\n\"",
-    "build/jsx": "esbuild src/jsx/index.js --format=iife --global-name=MiniJSX --bundle --outfile=dist/MiniJSX-%npm_package_config_jsxVersion%.js --banner:js=\"/* MiniJSX v%npm_package_config_jsxVersion% */\n\""
+    "build": "esbuild src/react/index.js --format=iife --global-name=Fluid --bundle --outfile=dist/Fluid-%npm_package_config_core%.js --banner:js=\"/* Fluid v%npm_package_config_core% */\n\"",
+    "build/jsx": "esbuild src/jsx/index.js --format=iife --global-name=Jsxify --bundle --outfile=dist/Jsxify-%npm_package_config_jsxVersion%.js --banner:js=\"/* Jsxify v%npm_package_config_jsxVersion% */\n\""
   },
   "author": "",
   "license": "ISC",

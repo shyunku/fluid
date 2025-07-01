@@ -185,7 +185,12 @@ function parseChildren(source, index, parentTag) {
   const children = [];
 
   while (cursor < source.length) {
-    cursor = skipWhitespaceAndComments(source, cursor);
+    // cursor = skipWhitespaceAndComments(source, cursor);
+    if (source.startsWith("{/*", cursor)) {
+      const end = source.indexOf("*/}", cursor + 3);
+      cursor = end === -1 ? source.length : end + 3;
+      continue;
+    }
 
     if (source.startsWith("</", cursor)) {
       const closingTagStart = cursor + 2;
@@ -225,10 +230,12 @@ function parseChildren(source, index, parentTag) {
     while (
       cursor < source.length &&
       source[cursor] !== "<" &&
-      source[cursor] !== "{"
+      source[cursor] !== "{" &&
+      !source.startsWith("{/*", cursor)
     ) {
       cursor++;
     }
+
     const text = source.slice(textStart, cursor);
     if (text.trim()) {
       children.push({ type: "Text", value: text });

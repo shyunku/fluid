@@ -1,23 +1,18 @@
-/* MiniJSX v2.1.0 */
+/* MiniJSX v2.1.4 */
 var MiniJSX = (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
   var __copyProps = (to, from, except, desc) => {
-    if ((from && typeof from === "object") || typeof from === "function") {
+    if (from && typeof from === "object" || typeof from === "function") {
       for (let key of __getOwnPropNames(from))
         if (!__hasOwnProp.call(to, key) && key !== except)
-          __defProp(to, key, {
-            get: () => from[key],
-            enumerable:
-              !(desc = __getOwnPropDesc(from, key)) || desc.enumerable,
-          });
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
     }
     return to;
   };
-  var __toCommonJS = (mod) =>
-    __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
   // src/jsx/index.js
   var index_exports = {};
@@ -65,22 +60,18 @@ var MiniJSX = (() => {
       cursor += 2;
       return {
         node: { type: "Element", tagName, props, children: [] },
-        end: cursor,
+        end: cursor
       };
     }
     if (source[cursor] !== ">") {
       throw new Error("Expected '>' at the end of the opening tag.");
     }
     cursor++;
-    const { children, end: childrenEnd } = parseChildren(
-      source,
-      cursor,
-      tagName
-    );
+    const { children, end: childrenEnd } = parseChildren(source, cursor, tagName);
     cursor = childrenEnd;
     return {
       node: { type: "Element", tagName, props, children, startCursor },
-      end: cursor,
+      end: cursor
     };
   }
   function parseTagName(source, index) {
@@ -147,7 +138,7 @@ var MiniJSX = (() => {
           }
           value = {
             type: "StringLiteral",
-            value: source.slice(valueStart, valueEnd),
+            value: source.slice(valueStart, valueEnd)
           };
           cursor = valueEnd + 1;
         } else {
@@ -162,7 +153,11 @@ var MiniJSX = (() => {
     let cursor = index;
     const children = [];
     while (cursor < source.length) {
-      cursor = skipWhitespaceAndComments(source, cursor);
+      if (source.startsWith("{/*", cursor)) {
+        const end = source.indexOf("*/}", cursor + 3);
+        cursor = end === -1 ? source.length : end + 3;
+        continue;
+      }
       if (source.startsWith("</", cursor)) {
         const closingTagStart = cursor + 2;
         const { name: closingTag, end: closingTagEnd } = parseTagName(
@@ -195,11 +190,7 @@ var MiniJSX = (() => {
         continue;
       }
       const textStart = cursor;
-      while (
-        cursor < source.length &&
-        source[cursor] !== "<" &&
-        source[cursor] !== "{"
-      ) {
+      while (cursor < source.length && source[cursor] !== "<" && source[cursor] !== "{" && !source.startsWith("{/*", cursor)) {
         cursor++;
       }
       const text = source.slice(textStart, cursor);
@@ -228,7 +219,7 @@ var MiniJSX = (() => {
           const transformedCode = transformJsx(code);
           return {
             node: { type: "JsExpression", code: transformedCode },
-            end: currentPos + 1,
+            end: currentPos + 1
           };
         }
       } else if (char === "'" || char === '"' || char === "`") {
@@ -245,14 +236,12 @@ var MiniJSX = (() => {
   }
   function generateCode(node, indent = 0) {
     const format = ENABLE_FORMATTING;
-    const i = (level = 0) => (format ? "  ".repeat(indent + level) : "");
+    const i = (level = 0) => format ? "  ".repeat(indent + level) : "";
     const nl = format ? "\n" : "";
     const sp = format ? " " : "";
     switch (node.type) {
       case "Element": {
-        const tag = node.tagName.match(/^[a-z]/)
-          ? `'${node.tagName}'`
-          : node.tagName || "null";
+        const tag = node.tagName.match(/^[a-z]/) ? `'${node.tagName}'` : node.tagName || "null";
         let propsStr = "null";
         let propsAreComplex = false;
         if (node.props.length > 0) {
@@ -267,7 +256,7 @@ var MiniJSX = (() => {
             return `${p.name}:${sp}${propValue}`;
           });
           const singleLineProps = `{${sp}${propParts.join(`,${sp}`)}${sp}}`;
-          if (propsAreComplex || (format && singleLineProps.length > 80)) {
+          if (propsAreComplex || format && singleLineProps.length > 80) {
             propsAreComplex = true;
             propsStr = `{${nl}${i(1)}${propParts.join(
               `,${nl}${i(1)}`
@@ -276,17 +265,13 @@ var MiniJSX = (() => {
             propsStr = singleLineProps;
           }
         }
-        const children = node.children
-          .map((child) => generateCode(child, indent + 1))
-          .filter(Boolean);
+        const children = node.children.map((child) => generateCode(child, indent + 1)).filter(Boolean);
         const childrenAreComplex = children.some(
           (c) => c.includes("\n") || c.startsWith("h(")
         );
-        const isComplex =
-          propsAreComplex || childrenAreComplex || children.length > 1;
+        const isComplex = propsAreComplex || childrenAreComplex || children.length > 1;
         if (!format) {
-          const childrenStr =
-            children.length > 0 ? `,${children.join(",")}` : "";
+          const childrenStr = children.length > 0 ? `,${children.join(",")}` : "";
           return `h(${tag},${propsStr}${childrenStr})`;
         }
         if (!isComplex && children.length <= 1) {
@@ -294,9 +279,7 @@ var MiniJSX = (() => {
           return `h(${tag},${sp}${propsStr}${childrenStr})`;
         } else {
           const childrenStr = children.join(`,${nl}${i(1)}`);
-          return `h(${nl}${i(1)}${tag},${nl}${i(1)}${propsStr}${
-            children.length > 0 ? `,${nl}${i(1)}${childrenStr}` : ""
-          }${nl}${i()})`;
+          return `h(${nl}${i(1)}${tag},${nl}${i(1)}${propsStr}${children.length > 0 ? `,${nl}${i(1)}${childrenStr}` : ""}${nl}${i()})`;
         }
       }
       case "JsExpression": {
@@ -401,10 +384,7 @@ var MiniJSX = (() => {
         }
         if (/[a-zA-Z]/.test(prevChar)) {
           let startOfWord = j;
-          while (
-            startOfWord > 0 &&
-            /[a-zA-Z0-9_$]/.test(source[startOfWord - 1])
-          ) {
+          while (startOfWord > 0 && /[a-zA-Z0-9_$]/.test(source[startOfWord - 1])) {
             startOfWord--;
           }
           const word = source.slice(startOfWord, j + 1);
@@ -415,7 +395,7 @@ var MiniJSX = (() => {
             "throw",
             "delete",
             "void",
-            "typeof",
+            "typeof"
           ]);
           if (keywords.has(word)) {
             return i;

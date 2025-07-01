@@ -44,12 +44,18 @@ const App = () => {
     {},
     h("h1", {}, "Home Page"),
     h("p", {}, `Current time: ${new Date(now).toLocaleTimeString()}`),
-    h("div", {}, now, massiveRef.current ? massiveRef.current.innerHTML : ""),
+    h(
+      "div",
+      {},
+      now,
+      " ",
+      massiveRef.current ? massiveRef.current.innerHTML : ""
+    ),
     h(Massive, { massiveRef })
   );
 };
 
-const MassiveCount = 10000;
+const MassiveCount = 100;
 const Massive = ({ massiveRef }) => {
   const [count, setCount] = useState(0);
   const items = useMemo(() => {
@@ -63,7 +69,7 @@ const Massive = ({ massiveRef }) => {
   return h(
     "div",
     {},
-    h("h2", {}, "Massive Component"),
+    h("h2", { style: { marginLeft: "15px" } }, "Massive Component"),
     h(
       "button",
       { onClick: () => setCount((c) => c + 1), ref: massiveRef },
